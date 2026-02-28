@@ -92,3 +92,4 @@ lib/
 ## What's next: Multi-user version
 
 See the conversation notes for what's needed to open this up to others.
+# living-map
