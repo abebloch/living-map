@@ -566,7 +566,11 @@ export default function LivingMap() {
   const [saveStatus, setSaveStatus] = useState("");
   const [suggestions, setSuggestions] = useState({});
   const [harvestPrompt, setHarvestPrompt] = useState(null);
+  const [celebration, setCelebration] = useState(null);
+  const [pulsingNode, setPulsingNode] = useState(null);
   const harvestTimerRef = useRef(null);
+  const celebrationTimerRef = useRef(null);
+  const sessionShipCount = useRef(0);
   const suggestionsGenerating = useRef(new Set());
   const canvasRef = useRef(null);
   const capRef = useRef(null);
@@ -746,6 +750,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
     setSuggestions(prev => { const next = { ...prev }; delete next[targetId]; return next; });
     if (harvestTimerRef.current) clearTimeout(harvestTimerRef.current);
     setHarvestPrompt(null);
+    triggerCelebration(targetId, `${shipText} (harvested)`, true);
   };
 
   const dismissHarvest = () => {
@@ -753,7 +758,34 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
     setHarvestPrompt(null);
   };
 
-  const addShip = (nid, txt) => { setShipLog(p => [...p, { nodeId: nid, text: txt, date: new Date().toISOString().slice(0, 10) }]); const n = nodes.find(x => x.id === nid); logAct(`Shipped: "${txt}" (${n?.title})`); setSuggestions(prev => { const next = { ...prev }; delete next[nid]; return next; }); setTimeout(() => checkSynergyHarvest(nid, txt), 600); };
+  /* CELEBRATION LOGIC */
+  const triggerCelebration = (nodeId, shipText, isHarvest) => {
+    sessionShipCount.current += 1;
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const lastShipForNode = shipLog.filter(s => s.nodeId === nodeId).slice(-1)[0];
+    const daysSinceLastShip = lastShipForNode ? Math.floor((Date.now() - new Date(lastShipForNode.date).getTime()) / 86400000) : 999;
+    const isFirstOfSession = sessionShipCount.current === 1;
+    const isColdProject = daysSinceLastShip >= 3;
+    const fullCelebration = isFirstOfSession || (isColdProject && !isHarvest);
+    if (fullCelebration) {
+      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+      setCelebration({ nodeTitle: node.title, cluster: node.cluster, shipText, totalShips: shipLog.length + 1 });
+      celebrationTimerRef.current = setTimeout(() => setCelebration(null), 3500);
+    } else {
+      setPulsingNode(nodeId);
+      setTimeout(() => setPulsingNode(null), 1200);
+    }
+  };
+
+  const addShip = (nid, txt) => {
+    triggerCelebration(nid, txt, false);
+    setShipLog(p => [...p, { nodeId: nid, text: txt, date: new Date().toISOString().slice(0, 10) }]);
+    const n = nodes.find(x => x.id === nid);
+    logAct(`Shipped: "${txt}" (${n?.title})`);
+    setSuggestions(prev => { const next = { ...prev }; delete next[nid]; return next; });
+    setTimeout(() => checkSynergyHarvest(nid, txt), 600);
+  };
   const addNodeFn = (title, cluster) => { const cn = nodes.filter(n => n.cluster === cluster); const x = cn.length ? cn.reduce((s, n) => s + n.x, 0) / cn.length + (Math.random() - 0.5) * 80 : 400; const y = cn.length ? Math.max(...cn.map(n => n.y)) + 50 + Math.random() * 30 : 300; const nn = { id: `n_${Date.now()}`, title, cluster, status: "exploring", x, y, desc: "", nextMove: "" }; setNodes(p => [...p, nn]); logAct(`Added: "${title}" to ${cluster}`); setSel(nn.id); setAddingNode(false); };
   const addConnectionFn = (from, to, type) => { if (from === to || synergies.some(s => (s.from === from && s.to === to) || (s.from === to && s.to === from))) return; setSynergies(p => [...p, { from, to, type, label: "" }]); const a = nodes.find(n => n.id === from); const b = nodes.find(n => n.id === to); logAct(`Connected: ${a?.title} ↔ ${b?.title}`); setAddingConn(null); };
   const removeNode = (id) => { const n = nodes.find(x => x.id === id); setNodes(p => p.filter(x => x.id !== id)); setSynergies(p => p.filter(s => s.from !== id && s.to !== id)); logAct(`Removed: "${n?.title}"`); setSel(null); };
@@ -900,11 +932,13 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
     const nodeBg = isSel ? `${cl.main}18` : isDormant ? DORMANT_STYLE.bg : en ? en.bg : `${C.bgLight}dd`;
     const nodeBorder = isSel ? cl.main : isDormant ? DORMANT_STYLE.border.slice(0, 7) : en ? en.border.slice(0, 7) : isConn ? "#fff" : `${cl.main}25`;
     const nodeGlow = isSel ? `0 0 20px ${cl.main}30` : isDormant ? DORMANT_STYLE.glow : en ? `0 0 16px ${en.glow}` : "0 2px 10px rgba(0,0,0,0.3)";
+    const isPulsing = pulsingNode === node.id;
+    const pulseGlow = isPulsing ? `0 0 24px ${C.mint}50, 0 0 48px ${C.mint}20` : nodeGlow;
     return (
       <div onMouseEnter={() => !addingConn && !dragNodeRef.current && setHov(node.id)} onMouseLeave={() => setHov(null)}
         onMouseDown={e => onNodeMD(e, node.id)} onTouchStart={e => onNodeMD(e, node.id)}
         style={{ position: "absolute", left: node.x, top: node.y, zIndex: isSel ? 100 : isFocusDimmed ? 1 : 10, transform: `scale(${grav.scale})`, transformOrigin: "center center", opacity: finalOpacity, filter: blurAmount, cursor: isConn ? "crosshair" : "grab", transition: "opacity 0.4s, transform 0.3s ease, filter 0.4s", userSelect: "none", pointerEvents: isFocusDimmed ? "none" : "auto" }}>
-        <div style={{ background: nodeBg, border: `1.5px solid ${nodeBorder}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: nodeGlow, transition: "border-color 0.3s, box-shadow 0.3s, background 0.3s" }}>
+        <div style={{ background: nodeBg, border: `1.5px solid ${isPulsing ? C.mint : nodeBorder}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: pulseGlow, transition: "border-color 0.3s, box-shadow 0.3s, background 0.3s", animation: isPulsing ? "shipPulse 1.2s ease-out" : "none" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: isDormant ? C.dim : s.color, fontSize: 10 }}>{s.icon}</span><span style={{ color: isDormant ? C.dim : C.muted, fontSize: 9, letterSpacing: "0.04em", textTransform: "uppercase" }}>{s.label}</span></div>
             {hasSuggestion && <span style={{ color: C.lavender, fontSize: 8, opacity: 0.7 }}>✦</span>}
@@ -1223,6 +1257,21 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
           </div>
         </div>
       )}
+      {celebration && (
+        <div onClick={() => { if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current); setCelebration(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 280, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)", animation: "celebFadeIn 0.3s ease-out", cursor: "pointer" }}>
+          <div style={{ textAlign: "center", animation: "celebScaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12, animation: "celebBounce 0.6s ease-out 0.2s both" }}>✦</div>
+            <div style={{ color: C.mint, fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>Shipped</div>
+            <div style={{ color: C.text, fontSize: 18, fontWeight: 700, fontFamily: "'Playfair Display',serif", marginBottom: 6, maxWidth: 320 }}>{celebration.shipText}</div>
+            <div style={{ display: "flex", gap: 6, justifyContent: "center", alignItems: "center" }}>
+              <span style={{ color: CLUSTERS[celebration.cluster]?.main || C.muted, fontSize: 11 }}>{celebration.nodeTitle}</span>
+              <span style={{ color: C.faint, fontSize: 10 }}>·</span>
+              <span style={{ color: C.faint, fontSize: 10 }}>#{celebration.totalShips}</span>
+            </div>
+          </div>
+        </div>
+      )}
       <AddModal />
       {addingConn && (<div style={{ position: "fixed", top: 50, left: "50%", transform: "translateX(-50%)", zIndex: 250, background: C.surface, border: `1px solid ${C.lavender}40`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }}>
         <span style={{ color: C.text, fontSize: 12 }}>Click a node to connect from <strong>{nodes.find(n => n.id === addingConn.from)?.title}</strong></span>
@@ -1230,7 +1279,13 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
         <button onClick={() => setAddingConn(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>✕</button>
       </div>)}
       <svg style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, opacity: 0.02 }} width="100%" height="100%"><defs><pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5" /></pattern></defs><rect width="100%" height="100%" fill="url(#g)" /></svg>
-      <style>{`@keyframes fadeSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
+      <style>{`
+        @keyframes fadeSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes shipPulse { 0% { box-shadow: 0 0 8px rgba(115,235,174,0.3); } 40% { box-shadow: 0 0 28px rgba(115,235,174,0.5), 0 0 56px rgba(115,235,174,0.15); } 100% { box-shadow: 0 0 8px rgba(115,235,174,0); } }
+        @keyframes celebFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes celebScaleIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+        @keyframes celebBounce { 0% { opacity: 0; transform: scale(0.3) translateY(10px); } 60% { opacity: 1; transform: scale(1.15) translateY(-4px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+      `}</style>
     </div>
   );
 }
