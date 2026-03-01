@@ -259,6 +259,285 @@ NODES:\n${nodesSummary}\n\nRECENT SHIPS:\n${recentShips || "None."}\n\nACTIVITY:
 }
 
 /* ═══════════════════════════════════
+   WEEKLY REVIEW PANEL
+   ═══════════════════════════════════ */
+function ReviewPanel({ nodes, synergies, shipLog, energyMap, gravityMap, setGravityMap, setNodes, setView }) {
+  const [step, setStep] = useState(1);
+  const [mirrorData, setMirrorData] = useState(null);
+  const [mirrorLoading, setMirrorLoading] = useState(false);
+  const [mirrorError, setMirrorError] = useState(false);
+  const [parkingIdx, setParkingIdx] = useState(0);
+  const [gravityDraft, setGravityDraft] = useState({ ...gravityMap });
+  const [reviewDone, setReviewDone] = useState(false);
+
+  const parkingItems = nodes.filter(n => n.cluster === "Intake Zone");
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const weekShips = shipLog.filter(s => s.date >= sevenDaysAgo);
+  const activeProjects = nodes.filter(n => n.status !== "shipped" && n.status !== "dormant");
+
+  /* STEP 1: THE MIRROR — AI analysis */
+  const generateMirror = async () => {
+    if (mirrorLoading) return;
+    setMirrorLoading(true); setMirrorError(false);
+    const clusterShips = {};
+    weekShips.forEach(s => {
+      const n = nodes.find(x => x.id === s.nodeId);
+      if (n) { clusterShips[n.cluster] = (clusterShips[n.cluster] || 0) + 1; }
+    });
+    const nodesSummary = nodes.filter(n => n.status !== "shipped").map(n => {
+      const ships = weekShips.filter(s => s.nodeId === n.id).length;
+      const g = gravityMap[n.id] || "normal";
+      const e = energyMap[n.id] || "none";
+      return `"${n.title}" [${n.cluster}] status:${n.status} gravity:${g} energy:${e} ships_this_week:${ships}`;
+    }).join("\n");
+    const shipDetails = weekShips.map(s => { const n = nodes.find(x => x.id === s.nodeId); return `${s.date}: "${s.text}" → ${n?.title} [${n?.cluster}]`; }).join("\n");
+    const prompt = `You are analyzing Anna's weekly project activity for her Living Map review.
+
+PROJECTS:\n${nodesSummary}
+
+THIS WEEK'S SHIPS (${weekShips.length} total):\n${shipDetails || "None this week."}
+
+SHIPS BY CLUSTER: ${Object.entries(clusterShips).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c}: ${n}`).join(", ") || "None"}
+
+INTAKE ZONE: ${parkingItems.length} unprocessed items
+
+Analyze and return ONLY valid JSON (no markdown, no backticks):
+{
+  "hotClusters": ["cluster name", "cluster name"],
+  "coldCluster": "cluster name or null if none",
+  "mismatch": "One sentence about gravity vs behavior mismatch, or null if aligned",
+  "observation": "One honest, warm observation about the week's pattern (1-2 sentences)",
+  "suggestion": "One concrete suggestion for next week (1 sentence)",
+  "totalShips": ${weekShips.length}
+}
+
+Be honest. If nothing happened, say so plainly. If there's real momentum, name it. Never generic.`;
+    try {
+      const response = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 400, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!response.ok) { setMirrorError(true); setMirrorLoading(false); return; }
+      const data = await response.json();
+      const text = data.content?.find(b => b.type === "text")?.text?.trim();
+      if (text) {
+        const clean = text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean);
+        setMirrorData(parsed);
+      } else { setMirrorError(true); }
+    } catch (err) { console.error("Mirror error:", err); setMirrorError(true); }
+    finally { setMirrorLoading(false); }
+  };
+
+  useEffect(() => { if (step === 1 && !mirrorData && !mirrorLoading) generateMirror(); }, [step]);
+
+  /* STEP 2: PARKING LOT — assign or discard */
+  const assignParking = (nodeId, targetCluster) => {
+    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, cluster: targetCluster } : n));
+  };
+  const deleteParking = (nodeId) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+  };
+  const skipParking = () => setParkingIdx(i => i + 1);
+
+  /* STEP 3: THE RESET — commit gravity changes */
+  const commitReset = () => {
+    setGravityMap(gravityDraft);
+    setReviewDone(true);
+  };
+
+  const stepColor = step === 1 ? C.sky : step === 2 ? C.gold : C.mint;
+  const stepLabels = { 1: "The Mirror", 2: "The Parking Lot", 3: "The Reset" };
+
+  return (
+    <div style={{ position: "fixed", left: 0, top: 48, bottom: 0, width: "100%", background: C.bg, zIndex: 180, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px", maxWidth: 640, margin: "0 auto", width: "100%" }}>
+        {/* STEP INDICATOR */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 28, alignItems: "center" }}>
+          {[1, 2, 3].map(s => (
+            <div key={s} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button onClick={() => { if (s < step || (s === 2 && step >= 1) || (s === 3 && step >= 2)) setStep(s); }}
+                style={{ width: 28, height: 28, borderRadius: "50%", border: `1.5px solid ${s === step ? stepColor : s < step ? `${C.mint}50` : C.border}`, background: s < step ? `${C.mint}18` : s === step ? `${stepColor}15` : "transparent", color: s < step ? C.mint : s === step ? stepColor : C.faint, fontSize: 11, fontWeight: 700, cursor: s <= step ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>{s < step ? "✓" : s}</button>
+              {s < 3 && <div style={{ width: 32, height: 1.5, background: s < step ? `${C.mint}40` : C.border, borderRadius: 1 }} />}
+            </div>
+          ))}
+          <span style={{ color: stepColor, fontSize: 11, fontWeight: 600, marginLeft: 8 }}>{stepLabels[step]}</span>
+        </div>
+
+        {/* STEP 1: THE MIRROR */}
+        {step === 1 && (
+          <div>
+            <h2 style={{ color: C.text, fontSize: 20, fontWeight: 700, margin: "0 0 4px", fontFamily: "'Playfair Display',serif" }}>The Mirror</h2>
+            <p style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>What your map says about this week.</p>
+            {mirrorLoading && (
+              <div style={{ background: C.surface, borderRadius: 12, padding: "24px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", gap: 4 }}>{[0, 1, 2].map(i => (<div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: C.sky, animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />))}</div>
+                <span style={{ color: C.muted, fontSize: 12 }}>Reading your week…</span>
+              </div>
+            )}
+            {mirrorError && !mirrorLoading && (
+              <div style={{ background: `${C.red}10`, borderRadius: 12, padding: "18px", border: `1px solid ${C.red}25` }}>
+                <p style={{ color: C.muted, fontSize: 12, margin: "0 0 10px" }}>Couldn't generate the analysis. Here's the raw data:</p>
+                <div style={{ color: C.text, fontSize: 12, marginBottom: 6 }}>{weekShips.length} ships this week across {[...new Set(weekShips.map(s => { const n = nodes.find(x => x.id === s.nodeId); return n?.cluster; }).filter(Boolean))].length} clusters.</div>
+                <button onClick={generateMirror} style={{ background: `${C.sky}18`, border: `1px solid ${C.sky}40`, borderRadius: 8, padding: "6px 14px", color: C.sky, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Retry</button>
+              </div>
+            )}
+            {mirrorData && !mirrorLoading && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* Ship count */}
+                <div style={{ background: C.surface, borderRadius: 12, padding: "16px 18px", border: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+                    <span style={{ color: C.mint, fontSize: 28, fontWeight: 700, fontFamily: "'Playfair Display',serif" }}>{mirrorData.totalShips}</span>
+                    <span style={{ color: C.muted, fontSize: 12 }}>ships this week</span>
+                  </div>
+                  {mirrorData.hotClusters?.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                      <span style={{ color: C.faint, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Hot</span>
+                      {mirrorData.hotClusters.map((c, i) => (<span key={i} style={{ padding: "2px 8px", borderRadius: 10, background: `${CLUSTERS[c]?.main || C.muted}15`, color: CLUSTERS[c]?.main || C.muted, fontSize: 10, fontWeight: 600 }}>{c}</span>))}
+                    </div>
+                  )}
+                  {mirrorData.coldCluster && (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ color: C.faint, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Cold</span>
+                      <span style={{ padding: "2px 8px", borderRadius: 10, background: `${C.dim}30`, color: C.faint, fontSize: 10 }}>{mirrorData.coldCluster}</span>
+                    </div>
+                  )}
+                </div>
+                {/* Mismatch */}
+                {mirrorData.mismatch && (
+                  <div style={{ background: `${C.warm}08`, borderRadius: 12, padding: "14px 16px", border: `1px solid ${C.warm}20` }}>
+                    <div style={{ color: C.warm, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Gravity mismatch</div>
+                    <p style={{ color: C.text, fontSize: 12, lineHeight: 1.6, margin: 0 }}>{mirrorData.mismatch}</p>
+                  </div>
+                )}
+                {/* Observation */}
+                <div style={{ background: C.surface, borderRadius: 12, padding: "14px 16px", border: `1px solid ${C.sky}18` }}>
+                  <p style={{ color: C.text, fontSize: 13, lineHeight: 1.7, margin: 0 }}>{mirrorData.observation}</p>
+                </div>
+                {/* Suggestion */}
+                <div style={{ background: `${C.lavender}08`, borderRadius: 12, padding: "14px 16px", border: `1px solid ${C.lavender}18` }}>
+                  <div style={{ color: C.lavender, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>For next week</div>
+                  <p style={{ color: C.text, fontSize: 12, lineHeight: 1.5, margin: 0 }}>{mirrorData.suggestion}</p>
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={() => setStep(2)} style={{ background: `${C.sky}18`, border: `1px solid ${C.sky}45`, borderRadius: 10, padding: "10px 22px", color: C.sky, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Next → The Parking Lot</button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: THE PARKING LOT */}
+        {step === 2 && (
+          <div>
+            <h2 style={{ color: C.text, fontSize: 20, fontWeight: 700, margin: "0 0 4px", fontFamily: "'Playfair Display',serif" }}>The Parking Lot</h2>
+            <p style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>{parkingItems.length} unprocessed items in your Intake Zone.</p>
+            {parkingItems.length === 0 || parkingIdx >= parkingItems.length ? (
+              <div style={{ background: C.surface, borderRadius: 12, padding: "28px", border: `1px solid ${C.border}`, textAlign: "center" }}>
+                <div style={{ color: C.mint, fontSize: 18, marginBottom: 8 }}>✓</div>
+                <p style={{ color: C.text, fontSize: 13, margin: "0 0 4px" }}>{parkingItems.length === 0 ? "Intake Zone is clear." : "All items reviewed."}</p>
+                <p style={{ color: C.muted, fontSize: 11 }}>Nothing parked to sort through.</p>
+              </div>
+            ) : (
+              <div>
+                <div style={{ color: C.faint, fontSize: 10, marginBottom: 8 }}>{parkingIdx + 1} of {parkingItems.length}</div>
+                <div style={{ background: C.surface, borderRadius: 12, padding: "20px", border: `1px solid ${C.gold}20`, marginBottom: 14 }}>
+                  <div style={{ color: C.text, fontSize: 15, fontWeight: 600, marginBottom: 6, lineHeight: 1.4 }}>{parkingItems[parkingIdx].title}</div>
+                  {parkingItems[parkingIdx].desc && parkingItems[parkingIdx].desc !== parkingItems[parkingIdx].title && (
+                    <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.5, margin: "0 0 6px" }}>{parkingItems[parkingIdx].desc}</p>
+                  )}
+                  {parkingItems[parkingIdx].capturedDuring && (
+                    <span style={{ padding: "2px 7px", borderRadius: 8, background: `${C.gold}12`, color: C.gold, fontSize: 9 }}>captured during {parkingItems[parkingIdx].capturedDuring}</span>
+                  )}
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ color: C.faint, fontSize: 9, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Assign to cluster</div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {Object.entries(CLUSTERS).filter(([c]) => c !== "Intake Zone").map(([c, info]) => (
+                      <button key={c} onClick={() => assignParking(parkingItems[parkingIdx].id, c)}
+                        style={{ background: `${info.main}10`, border: `1px solid ${info.main}30`, borderRadius: 8, padding: "6px 12px", color: info.main, fontSize: 10, fontWeight: 500, cursor: "pointer" }}>{c.split(" ").slice(0, 2).join(" ")}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => deleteParking(parkingItems[parkingIdx].id)} style={{ background: `${C.red}10`, border: `1px solid ${C.red}25`, borderRadius: 8, padding: "6px 14px", color: C.red, fontSize: 11, cursor: "pointer" }}>Delete</button>
+                  <button onClick={skipParking} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.muted, fontSize: 11, cursor: "pointer" }}>Leave parked</button>
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
+              <button onClick={() => setStep(1)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 18px", color: C.muted, fontSize: 12, cursor: "pointer" }}>← Back</button>
+              <button onClick={() => setStep(3)} style={{ background: `${C.gold}18`, border: `1px solid ${C.gold}45`, borderRadius: 10, padding: "10px 22px", color: C.gold, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Next → The Reset</button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: THE RESET */}
+        {step === 3 && !reviewDone && (
+          <div>
+            <h2 style={{ color: C.text, fontSize: 20, fontWeight: 700, margin: "0 0 4px", fontFamily: "'Playfair Display',serif" }}>The Reset</h2>
+            <p style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>Set your gravity weights for the coming week. What deserves your attention?</p>
+            {mirrorData?.mismatch && (
+              <div style={{ background: `${C.warm}08`, borderRadius: 10, padding: "10px 14px", border: `1px solid ${C.warm}18`, marginBottom: 16 }}>
+                <div style={{ color: C.warm, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>From the mirror</div>
+                <p style={{ color: C.muted, fontSize: 11, margin: 0, lineHeight: 1.5 }}>{mirrorData.mismatch}</p>
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {activeProjects.sort((a, b) => {
+                const grav = { heavy: 0, normal: 1, light: 2, undefined: 1 };
+                return (grav[gravityDraft[a.id]] ?? 1) - (grav[gravityDraft[b.id]] ?? 1);
+              }).map(n => {
+                const cl = CLUSTERS[n.cluster] || { main: C.muted };
+                const ships = weekShips.filter(s => s.nodeId === n.id).length;
+                const cur = gravityDraft[n.id] || "normal";
+                return (
+                  <div key={n.id} style={{ background: C.surface, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <span style={{ color: cl.main, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>{n.cluster.split(" ").slice(0, 2).join(" ")}</span>
+                        {ships > 0 && <span style={{ color: C.mint, fontSize: 9 }}>✦ {ships}</span>}
+                      </div>
+                      <div style={{ color: C.text, fontSize: 12, fontWeight: 500 }}>{n.title}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 3 }}>
+                      {Object.entries(GRAVITY_LEVELS).map(([level, info]) => {
+                        const active = cur === level;
+                        return (<button key={level} onClick={() => setGravityDraft(p => { const nm = { ...p }; if (level === "normal") delete nm[n.id]; else nm[n.id] = level; return nm; })}
+                          style={{ width: level === "heavy" ? 28 : level === "normal" ? 24 : 20, height: level === "heavy" ? 28 : level === "normal" ? 24 : 20, borderRadius: "50%", border: `1.5px solid ${active ? C.text : C.border}`, background: active ? `${C.text}15` : "transparent", color: active ? C.text : C.faint, fontSize: 8, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{info.label[0]}</button>);
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
+              <button onClick={() => setStep(2)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 18px", color: C.muted, fontSize: 12, cursor: "pointer" }}>← Back</button>
+              <button onClick={commitReset} style={{ background: `${C.mint}20`, border: `1px solid ${C.mint}50`, borderRadius: 10, padding: "10px 22px", color: C.mint, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✓ Complete review</button>
+            </div>
+          </div>
+        )}
+
+        {/* DONE */}
+        {reviewDone && (
+          <div style={{ paddingTop: 40, textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>✓</div>
+            <h2 style={{ color: C.text, fontSize: 20, fontWeight: 700, margin: "0 0 8px", fontFamily: "'Playfair Display',serif" }}>Weekly review complete</h2>
+            <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.6, marginBottom: 6 }}>
+              {weekShips.length} ships this week. {Object.values(gravityDraft).filter(v => v === "heavy").length} projects set to Heavy.
+              {parkingItems.length > 0 ? ` ${parkingItems.length} items still parked.` : " Intake Zone clear."}
+            </p>
+            {mirrorData?.suggestion && <p style={{ color: C.lavender, fontSize: 12, fontStyle: "italic", marginBottom: 20 }}>{mirrorData.suggestion}</p>}
+            <button onClick={() => setView("map")} style={{ background: `${C.mint}18`, border: `1px solid ${C.mint}45`, borderRadius: 10, padding: "10px 22px", color: C.mint, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Back to map</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
    MAIN APP
    ═══════════════════════════════════ */
 export default function LivingMap() {
@@ -820,8 +1099,8 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 210, background: `${C.bg}ee`, backdropFilter: "blur(14px)", borderBottom: `1px solid ${C.border}`, padding: "10px 18px", display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 700, color: C.text, marginRight: 10, whiteSpace: "nowrap" }}>Anna's Living Map</div>
         <div style={{ display: "flex", gap: 2, marginRight: 8 }}>
-          {[["map", "Map"], ["connections", "Connections"], ["log", "Log"], ["claude", "Claude"]].map(([v, l]) => (
-            <button key={v} onClick={() => setView(v)} style={{ ...pill(view === v, v === "claude" ? C.lavender : C.text), ...(v === "claude" && view !== "claude" ? { borderColor: `${C.lavender}40` } : {}) }}>{v === "claude" ? "💬 " + l : l}</button>
+          {[["map", "Map"], ["connections", "Connections"], ["log", "Log"], ["review", "Review"], ["claude", "Claude"]].map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{ ...pill(view === v, v === "claude" ? C.lavender : v === "review" ? C.gold : C.text), ...(v === "claude" && view !== "claude" ? { borderColor: `${C.lavender}40` } : {}), ...(v === "review" && view !== "review" ? { borderColor: `${C.gold}30` } : {}) }}>{v === "claude" ? "💬 " + l : v === "review" ? "📋 " + l : l}</button>
           ))}
         </div>
         {view === "map" && <div style={{ display: "flex", gap: 2, flex: 1, flexWrap: "wrap", alignItems: "center" }}>
@@ -853,6 +1132,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
 
       {view === "connections" && <ConnectionsView />}
       {view === "log" && <LogView />}
+      {view === "review" && <ReviewPanel nodes={nodes} synergies={synergies} shipLog={shipLog} energyMap={energyMap} gravityMap={gravityMap} setGravityMap={setGravityMap} setNodes={setNodes} setView={setView} />}
       {view === "claude" && <ClaudePanel nodes={nodes} synergies={synergies} shipLog={shipLog} activityLog={activityLog} energyMap={energyMap} gravityMap={gravityMap} messages={chatMessages} setMessages={setChatMessages} />}
 
       {view === "map" && (
