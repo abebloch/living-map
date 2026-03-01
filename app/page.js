@@ -284,6 +284,8 @@ export default function LivingMap() {
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [suggestions, setSuggestions] = useState({});
+  const [harvestPrompt, setHarvestPrompt] = useState(null);
+  const harvestTimerRef = useRef(null);
   const suggestionsGenerating = useRef(new Set());
   const canvasRef = useRef(null);
   const capRef = useRef(null);
@@ -421,7 +423,55 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
   const updateNode = (id, ch) => setNodes(p => p.map(n => n.id === id ? { ...n, ...ch } : n));
   const changeStatus = (id, ns) => { const n = nodes.find(x => x.id === id); if (n) { updateNode(id, { status: ns }); logAct(`${n.title}: ${stl(n.status).label} → ${stl(ns).label}`); } };
   const cycleEnergy = (id) => setEnergyMap(p => { const cur = p[id]; const next = { undefined: "high", high: "medium", medium: "low", low: undefined }; const nv = next[cur]; const nm = { ...p }; if (nv) nm[id] = nv; else delete nm[id]; return nm; });
-  const addShip = (nid, txt) => { setShipLog(p => [...p, { nodeId: nid, text: txt, date: new Date().toISOString().slice(0, 10) }]); const n = nodes.find(x => x.id === nid); logAct(`Shipped: "${txt}" (${n?.title})`); setSuggestions(prev => { const next = { ...prev }; delete next[nid]; return next; }); };
+
+  /* SYNERGY HARVEST CHECK */
+  const checkSynergyHarvest = useCallback((sourceNodeId, shipText) => {
+    const sourceNode = nodes.find(n => n.id === sourceNodeId);
+    if (!sourceNode) return;
+    const conns = synergies.filter(s => s.from === sourceNodeId || s.to === sourceNodeId);
+    if (!conns.length) return;
+    const shipWords = shipText.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const typeWeight = { accelerates: 3, feeds: 2, shares: 1.5, lineage: 1 };
+    let best = null;
+    let bestScore = 0;
+    for (const conn of conns) {
+      const otherId = conn.from === sourceNodeId ? conn.to : conn.from;
+      const other = nodes.find(n => n.id === otherId);
+      if (!other || other.status === "shipped") continue;
+      let score = typeWeight[conn.type] || 1;
+      const titleWords = other.title.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      const labelWords = (conn.label || "").toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      const clusterWords = other.cluster.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      const targetWords = [...titleWords, ...labelWords, ...clusterWords];
+      const overlap = shipWords.filter(w => targetWords.some(tw => tw.includes(w) || w.includes(tw))).length;
+      score += overlap * 1.5;
+      if (conn.type === "accelerates") score += 1;
+      if (conn.label && shipWords.some(w => conn.label.toLowerCase().includes(w))) score += 2;
+      if (score > bestScore && score >= 3) { bestScore = score; best = { targetId: otherId, targetTitle: other.title, synergyLabel: conn.label, synergyType: conn.type, targetCluster: other.cluster }; }
+    }
+    if (best) {
+      if (harvestTimerRef.current) clearTimeout(harvestTimerRef.current);
+      setHarvestPrompt({ shipText, sourceNodeId, sourceTitle: sourceNode.title, ...best });
+      harvestTimerRef.current = setTimeout(() => setHarvestPrompt(null), 15000);
+    }
+  }, [nodes, synergies]);
+
+  const acceptHarvest = () => {
+    if (!harvestPrompt) return;
+    const { shipText, sourceTitle, targetId, targetTitle } = harvestPrompt;
+    setShipLog(p => [...p, { nodeId: targetId, text: `${shipText} (harvested from ${sourceTitle})`, date: new Date().toISOString().slice(0, 10), harvested: true }]);
+    logAct(`Synergy harvest: "${shipText}" → ${targetTitle}`);
+    setSuggestions(prev => { const next = { ...prev }; delete next[targetId]; return next; });
+    if (harvestTimerRef.current) clearTimeout(harvestTimerRef.current);
+    setHarvestPrompt(null);
+  };
+
+  const dismissHarvest = () => {
+    if (harvestTimerRef.current) clearTimeout(harvestTimerRef.current);
+    setHarvestPrompt(null);
+  };
+
+  const addShip = (nid, txt) => { setShipLog(p => [...p, { nodeId: nid, text: txt, date: new Date().toISOString().slice(0, 10) }]); const n = nodes.find(x => x.id === nid); logAct(`Shipped: "${txt}" (${n?.title})`); setSuggestions(prev => { const next = { ...prev }; delete next[nid]; return next; }); setTimeout(() => checkSynergyHarvest(nid, txt), 600); };
   const addNodeFn = (title, cluster) => { const cn = nodes.filter(n => n.cluster === cluster); const x = cn.length ? cn.reduce((s, n) => s + n.x, 0) / cn.length + (Math.random() - 0.5) * 80 : 400; const y = cn.length ? Math.max(...cn.map(n => n.y)) + 50 + Math.random() * 30 : 300; const nn = { id: `n_${Date.now()}`, title, cluster, status: "exploring", x, y, desc: "", nextMove: "" }; setNodes(p => [...p, nn]); logAct(`Added: "${title}" to ${cluster}`); setSel(nn.id); setAddingNode(false); };
   const addConnectionFn = (from, to, type) => { if (from === to || synergies.some(s => (s.from === from && s.to === to) || (s.from === to && s.to === from))) return; setSynergies(p => [...p, { from, to, type, label: "" }]); const a = nodes.find(n => n.id === from); const b = nodes.find(n => n.id === to); logAct(`Connected: ${a?.title} ↔ ${b?.title}`); setAddingConn(null); };
   const removeNode = (id) => { const n = nodes.find(x => x.id === id); setNodes(p => p.filter(x => x.id !== id)); setSynergies(p => p.filter(s => s.from !== id && s.to !== id)); logAct(`Removed: "${n?.title}"`); setSel(null); };
@@ -697,7 +747,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
             <button onClick={() => { if (shipInput.trim()) { addShip(n.id, shipInput.trim()); setShipInput(""); setShowShip(false); } }} style={btn(C.mint, true)}>✓</button>
           </div>)}
           {nodeShips.length === 0 && !showShip && <div style={{ color: C.faint, fontSize: 11, fontStyle: "italic" }}>Nothing shipped yet.</div>}
-          {nodeShips.map((sl, i) => (<div key={i} style={{ display: "flex", gap: 6, marginBottom: 4 }}><span style={{ color: C.mint, fontSize: 10 }}>✦</span><span style={{ color: C.text, fontSize: 11 }}>{sl.text}</span><span style={{ color: C.faint, fontSize: 10 }}>{sl.date}</span></div>))}
+          {nodeShips.map((sl, i) => (<div key={i} style={{ display: "flex", gap: 6, marginBottom: 4 }}><span style={{ color: sl.harvested ? C.lavender : C.mint, fontSize: 10 }}>{sl.harvested ? "↗" : "✦"}</span><span style={{ color: C.text, fontSize: 11 }}>{sl.text}</span><span style={{ color: C.faint, fontSize: 10 }}>{sl.date}</span></div>))}
         </div>
         <div style={{ marginTop: 24, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
           <button onClick={() => { if (confirm(`Remove "${n.title}"?`)) removeNode(n.id); }} style={{ background: "none", border: `1px solid ${C.red}30`, borderRadius: 8, padding: "4px 10px", color: C.red, fontSize: 10, cursor: "pointer", opacity: 0.5 }}>Remove</button>
@@ -732,7 +782,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
     <div style={{ position: "fixed", left: 0, top: 48, bottom: 0, width: "100%", background: C.bg, zIndex: 180, overflowY: "auto", padding: "24px 32px" }}>
       <h2 style={{ color: C.text, fontSize: 18, fontWeight: 700, margin: "0 0 6px", fontFamily: "'Playfair Display',serif" }}>Activity & Ship Log</h2>
       {shipLog.length > 0 && <div style={{ marginBottom: 24 }}><div style={{ color: C.mint, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>✦ Shipped ({shipLog.length})</div>
-        {[...shipLog].reverse().map((s, i) => { const n = nodes.find(x => x.id === s.nodeId); return (<div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, padding: "8px 12px", background: C.surface, borderRadius: 8, border: `1px solid ${C.border}` }}><span style={{ color: C.mint }}>✦</span><div><span style={{ color: C.text, fontSize: 12 }}>{s.text}</span><div style={{ display: "flex", gap: 8, marginTop: 3 }}><span style={{ color: clr(n?.cluster).main, fontSize: 10 }}>{n?.title}</span><span style={{ color: C.faint, fontSize: 10 }}>{s.date}</span></div></div></div>); })}
+        {[...shipLog].reverse().map((s, i) => { const n = nodes.find(x => x.id === s.nodeId); return (<div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, padding: "8px 12px", background: C.surface, borderRadius: 8, border: `1px solid ${s.harvested ? `${C.lavender}20` : C.border}` }}><span style={{ color: s.harvested ? C.lavender : C.mint }}>{s.harvested ? "↗" : "✦"}</span><div><span style={{ color: C.text, fontSize: 12 }}>{s.text}</span><div style={{ display: "flex", gap: 8, marginTop: 3 }}><span style={{ color: clr(n?.cluster).main, fontSize: 10 }}>{n?.title}</span><span style={{ color: C.faint, fontSize: 10 }}>{s.date}</span></div></div></div>); })}
       </div>}
       <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Activity ({activityLog.length})</div>
       {activityLog.length === 0 && <div style={{ color: C.faint, fontSize: 12, fontStyle: "italic" }}>Start making changes.</div>}
@@ -840,6 +890,25 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
       )}
 
       {selNode && view === "map" && (<><div onClick={() => setSel(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 195 }} /><Detail /></>)}
+      {harvestPrompt && (
+        <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 260, background: C.surface, border: `1px solid ${SYNERGY_TYPES[harvestPrompt.synergyType]?.color || C.lavender}40`, borderRadius: 14, padding: "14px 18px", maxWidth: 420, boxShadow: `0 8px 32px rgba(0,0,0,0.5), 0 0 20px ${SYNERGY_TYPES[harvestPrompt.synergyType]?.color || C.lavender}15`, backdropFilter: "blur(12px)", animation: "fadeSlideUp 0.35s ease-out" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            <div style={{ width: 14, height: 2, background: SYNERGY_TYPES[harvestPrompt.synergyType]?.color || C.lavender, borderRadius: 1 }} />
+            <span style={{ color: SYNERGY_TYPES[harvestPrompt.synergyType]?.color || C.lavender, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Synergy harvest</span>
+          </div>
+          <div style={{ color: C.text, fontSize: 12, lineHeight: 1.5, marginBottom: 4 }}>
+            <span style={{ fontWeight: 600 }}>"{harvestPrompt.shipText}"</span>
+          </div>
+          <div style={{ color: C.muted, fontSize: 11, marginBottom: 10 }}>
+            Also counts for <span style={{ color: clr(harvestPrompt.targetCluster).main, fontWeight: 600 }}>{harvestPrompt.targetTitle}</span>?
+            {harvestPrompt.synergyLabel && <span style={{ color: C.faint, fontSize: 10 }}> — {harvestPrompt.synergyLabel}</span>}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={acceptHarvest} style={{ background: `${C.mint}18`, border: `1px solid ${C.mint}45`, borderRadius: 8, padding: "6px 14px", color: C.mint, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>✦ Yes, log it</button>
+            <button onClick={dismissHarvest} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.muted, fontSize: 11, cursor: "pointer" }}>Not this time</button>
+          </div>
+        </div>
+      )}
       <AddModal />
       {addingConn && (<div style={{ position: "fixed", top: 50, left: "50%", transform: "translateX(-50%)", zIndex: 250, background: C.surface, border: `1px solid ${C.lavender}40`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }}>
         <span style={{ color: C.text, fontSize: 12 }}>Click a node to connect from <strong>{nodes.find(n => n.id === addingConn.from)?.title}</strong></span>
@@ -847,6 +916,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
         <button onClick={() => setAddingConn(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>✕</button>
       </div>)}
       <svg style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, opacity: 0.02 }} width="100%" height="100%"><defs><pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5" /></pattern></defs><rect width="100%" height="100%" fill="url(#g)" /></svg>
+      <style>{`@keyframes fadeSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
     </div>
   );
 }
