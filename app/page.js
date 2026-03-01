@@ -258,6 +258,7 @@ export default function LivingMap() {
   const [activityLog, setActivityLog] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(0.65);
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [addingNode, setAddingNode] = useState(false);
@@ -335,7 +336,7 @@ export default function LivingMap() {
 
   useEffect(() => { if (capOpen && capRef.current) capRef.current.focus(); }, [capOpen]);
 
-  /* PAN + NODE DRAG */
+  /* PAN + NODE DRAG + ZOOM */
   const getPointerPos = (e) => e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
   const [dragNode, setDragNode] = useState(null);
   const dragNodeOffset = useRef({ x: 0, y: 0 });
@@ -346,21 +347,45 @@ export default function LivingMap() {
     const pos = getPointerPos(e);
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
-    dragNodeOffset.current = { x: pos.x - (node.x + pan.x), y: pos.y - (node.y + pan.y) };
+    dragNodeOffset.current = { x: pos.x - (node.x * zoom + pan.x), y: pos.y - (node.y * zoom + pan.y) };
     didDragNode.current = false;
     setDragNode(nodeId);
-  }, [nodes, pan]);
+  }, [nodes, pan, zoom]);
   const onMM = useCallback((e) => {
     const pos = getPointerPos(e);
     if (dragNode) {
       e.preventDefault(); didDragNode.current = true;
-      const newX = pos.x - dragNodeOffset.current.x - pan.x;
-      const newY = pos.y - dragNodeOffset.current.y - pan.y;
+      const newX = (pos.x - dragNodeOffset.current.x - pan.x) / zoom;
+      const newY = (pos.y - dragNodeOffset.current.y - pan.y) / zoom;
       setNodes(prev => prev.map(n => n.id === dragNode ? { ...n, x: Math.round(newX), y: Math.round(newY) } : n));
     } else if (dragging) { e.preventDefault(); setPan({ x: pos.x - dragStart.x, y: pos.y - dragStart.y }); }
-  }, [dragging, dragStart, dragNode, pan]);
+  }, [dragging, dragStart, dragNode, pan, zoom]);
   const onMU = useCallback(() => { setDragging(false); setDragNode(null); }, []);
-  useEffect(() => { window.addEventListener("mousemove", onMM); window.addEventListener("mouseup", onMU); window.addEventListener("touchmove", onMM, { passive: false }); window.addEventListener("touchend", onMU); return () => { window.removeEventListener("mousemove", onMM); window.removeEventListener("mouseup", onMU); window.removeEventListener("touchmove", onMM); window.removeEventListener("touchend", onMU); }; }, [onMM, onMU]);
+  const onWheel = useCallback((e) => {
+    e.preventDefault(); e.stopPropagation();
+    const raw = -e.deltaY;
+    const factor = Math.abs(raw) > 50 ? 0.08 : 0.02;
+    const direction = raw > 0 ? 1 : -1;
+    const newZoom = Math.min(3, Math.max(0.15, zoom * (1 + direction * factor)));
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (rect) {
+      const cx = e.clientX - rect.left; const cy = e.clientY - rect.top;
+      const scale = newZoom / zoom;
+      setPan(p => ({ x: cx - scale * (cx - p.x), y: cy - scale * (cy - p.y) }));
+    }
+    setZoom(newZoom);
+  }, [zoom]);
+  useEffect(() => {
+    window.addEventListener("mousemove", onMM); window.addEventListener("mouseup", onMU);
+    window.addEventListener("touchmove", onMM, { passive: false }); window.addEventListener("touchend", onMU);
+    const canvas = canvasRef.current;
+    if (canvas) canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.removeEventListener("mousemove", onMM); window.removeEventListener("mouseup", onMU);
+      window.removeEventListener("touchmove", onMM); window.removeEventListener("touchend", onMU);
+      if (canvas) canvas.removeEventListener("wheel", onWheel);
+    };
+  }, [onMM, onMU, onWheel]);
 
   const pill = (active, color) => ({ background: active ? `${color}20` : "transparent", border: `1px solid ${active ? `${color}55` : C.border}`, borderRadius: 14, padding: "3px 10px", color: active ? color : C.muted, fontSize: 10, fontWeight: active ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" });
   const btn = (color, filled) => ({ background: filled ? color : `${color}15`, border: `1px solid ${color}40`, borderRadius: 8, padding: "5px 12px", color: filled ? C.bg : color, fontSize: 11, fontWeight: 600, cursor: "pointer" });
@@ -577,7 +602,7 @@ export default function LivingMap() {
       {view === "map" && (
         <div ref={canvasRef} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
           <div onMouseDown={onMD} onTouchStart={onMD} style={{ position: "absolute", inset: 0, zIndex: 1, cursor: dragging ? "grabbing" : "grab" }} />
-          <div style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, position: "relative", width: "100%", height: "100%", zIndex: 2, pointerEvents: "none" }}>
+          <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0", position: "relative", width: "100%", height: "100%", zIndex: 2, pointerEvents: "none" }}>
             <Blobs />
             <SynergyCanvas />
             <div style={{ pointerEvents: "auto" }}>{filtered.map(n => <Node key={n.id} node={n} />)}</div>
@@ -600,12 +625,20 @@ export default function LivingMap() {
       )}
 
       {view === "map" && (
-        <div style={{ position: "fixed", bottom: 14, left: 14, zIndex: 150, background: `${C.bgLight}e8`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "10px 12px", border: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {Object.entries(STATUSES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ color: v.color, fontSize: 10 }}>{v.icon}</span><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+        <div style={{ position: "fixed", bottom: 14, left: 14, zIndex: 150, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: `${C.bgLight}e8`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "6px 8px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 4 }}>
+            <button onClick={() => { const nz = Math.max(0.15, zoom * 0.8); const cx = window.innerWidth / 2; const cy = window.innerHeight / 2; const s = nz / zoom; setPan(p => ({ x: cx - s * (cx - p.x), y: cy - s * (cy - p.y) })); setZoom(nz); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, width: 26, height: 26, color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+            <span style={{ color: C.muted, fontSize: 10, minWidth: 36, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+            <button onClick={() => { const nz = Math.min(3, zoom * 1.25); const cx = window.innerWidth / 2; const cy = window.innerHeight / 2; const s = nz / zoom; setPan(p => ({ x: cx - s * (cx - p.x), y: cy - s * (cy - p.y) })); setZoom(nz); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, width: 26, height: 26, color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+            <button onClick={() => { setZoom(0.65); setPan({ x: 0, y: 0 }); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", color: C.muted, fontSize: 9, cursor: "pointer" }}>Fit</button>
           </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
-            {Object.entries(SYNERGY_TYPES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 14, height: 2, background: v.color, borderRadius: 1 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+          <div style={{ background: `${C.bgLight}e8`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "10px 12px", border: `1px solid ${C.border}` }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {Object.entries(STATUSES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ color: v.color, fontSize: 10 }}>{v.icon}</span><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
+              {Object.entries(SYNERGY_TYPES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 14, height: 2, background: v.color, borderRadius: 1 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+            </div>
           </div>
         </div>
       )}
