@@ -281,6 +281,8 @@ export default function LivingMap() {
   const [addingConn, setAddingConn] = useState(null);
   const [capOpen, setCapOpen] = useState(false);
   const [capText, setCapText] = useState("");
+  const [focusCapOpen, setFocusCapOpen] = useState(false);
+  const [focusCapText, setFocusCapText] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [suggestions, setSuggestions] = useState({});
@@ -289,6 +291,7 @@ export default function LivingMap() {
   const suggestionsGenerating = useRef(new Set());
   const canvasRef = useRef(null);
   const capRef = useRef(null);
+  const focusCapRef = useRef(null);
   const saveTimerRef = useRef(null);
 
   const selNode = nodes.find(n => n.id === sel);
@@ -476,17 +479,20 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
   const addConnectionFn = (from, to, type) => { if (from === to || synergies.some(s => (s.from === from && s.to === to) || (s.from === to && s.to === from))) return; setSynergies(p => [...p, { from, to, type, label: "" }]); const a = nodes.find(n => n.id === from); const b = nodes.find(n => n.id === to); logAct(`Connected: ${a?.title} ↔ ${b?.title}`); setAddingConn(null); };
   const removeNode = (id) => { const n = nodes.find(x => x.id === id); setNodes(p => p.filter(x => x.id !== id)); setSynergies(p => p.filter(s => s.from !== id && s.to !== id)); logAct(`Removed: "${n?.title}"`); setSel(null); };
   const removeConnection = (idx) => { const s = synergies[idx]; const a = nodes.find(n => n.id === s.from); const b = nodes.find(n => n.id === s.to); setSynergies(p => p.filter((_, i) => i !== idx)); logAct(`Disconnected: ${a?.title} ↔ ${b?.title}`); };
-  const quickCapture = (txt) => { const n = { id: `cap_${Date.now()}`, title: txt.length > 50 ? txt.slice(0, 50) + "…" : txt, cluster: "Intake Zone", status: "exploring", x: 720 + Math.random() * 100, y: 510 + Math.random() * 60, desc: txt, nextMove: "" }; setNodes(p => [...p, n]); logAct(`Captured: "${n.title}"`); };
+  const quickCapture = (txt, capturedDuring) => { const n = { id: `cap_${Date.now()}`, title: txt.length > 50 ? txt.slice(0, 50) + "…" : txt, cluster: "Intake Zone", status: "exploring", x: 1100 + Math.random() * 100, y: 680 + Math.random() * 60, desc: txt, nextMove: "", capturedDuring: capturedDuring || null }; setNodes(p => [...p, n]); logAct(`Captured: "${n.title}"${capturedDuring ? ` (during ${capturedDuring} focus)` : ""}`); };
   const resetAll = async () => { if (!confirm("Reset everything?")) return; setNodes(DEFAULT_NODES); setSynergies(DEFAULT_SYNERGIES); setEnergyMap({}); setGravityMap({}); setShipLog([]); setActivityLog([]); setChatMessages([]); setSuggestions({}); await storageDel(STORAGE_KEYS.mapState); await storageDel(STORAGE_KEYS.logs); await storageDel(STORAGE_KEYS.chat); await storageDel(STORAGE_KEYS.suggestions); };
 
   useEffect(() => { if (capOpen && capRef.current) capRef.current.focus(); }, [capOpen]);
+  useEffect(() => { if (focusCapOpen && focusCapRef.current) focusCapRef.current.focus(); }, [focusCapOpen]);
 
   /* ESCAPE exits focus mode */
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") { if (focusActive) { e.preventDefault(); setFilter("All"); } } };
+    const onKey = (e) => { if (e.key === "Escape") { if (focusCapOpen) { e.preventDefault(); setFocusCapOpen(false); setFocusCapText(""); } else if (focusActive) { e.preventDefault(); setFilter("All"); } } };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusActive]);
+  }, [focusActive, focusCapOpen]);
+
+  useEffect(() => { if (!focusActive) { setFocusCapOpen(false); setFocusCapText(""); } }, [focusActive]);
 
   /* PAN + NODE DRAG + ZOOM */
   const getPointerPos = (e) => e.touches?.length ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : e.changedTouches?.length ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : e.clientX !== undefined ? { x: e.clientX, y: e.clientY } : null;
@@ -664,6 +670,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
         <button onClick={() => setSel(null)} style={{ position: "absolute", top: 12, right: 14, background: "none", border: "none", color: C.muted, fontSize: 16, cursor: "pointer" }}>✕</button>
         <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
           <span style={{ padding: "3px 9px", borderRadius: 14, background: `${cl.main}15`, color: cl.main, fontSize: 10, fontWeight: 600 }}>{n.cluster}</span>
+          {n.capturedDuring && <span style={{ padding: "3px 9px", borderRadius: 14, background: `${C.gold}12`, color: C.gold, fontSize: 9, fontWeight: 500 }}>captured during {n.capturedDuring}</span>}
           {Object.entries(ENERGY_LEVELS).map(([level, info]) => {
             const active = energyMap[n.id] === level;
             return (<button key={level} onClick={() => setEnergyMap(p => { const nm = { ...p }; if (active) delete nm[n.id]; else nm[n.id] = level; return nm; })} style={{ ...pill(active, info.color), padding: "3px 9px", display: "flex", alignItems: "center", gap: 4 }}><div style={{ width: 7, height: 7, borderRadius: "50%", background: info.color, opacity: active ? 1 : 0.5 }} />{info.label}</button>);
@@ -859,6 +866,33 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
               <div><div style={{ color: C.text, fontSize: 11, fontWeight: 500 }}>{n.title}</div>{moveText && <div style={{ color: sug ? C.lavender : C.muted, fontSize: 9, marginTop: 1, fontStyle: sug ? "italic" : "normal", opacity: sug ? 0.6 : 1 }}>{sug ? "✦ " : "→ "}{moveText.length > 40 ? moveText.slice(0, 40) + "…" : moveText}</div>}</div>
             </div>);
           })}
+        </div>
+      )}
+
+      {view === "map" && focusActive && (
+        <div style={{ position: "fixed", top: 60, right: 14, zIndex: 155 }}>
+          {!focusCapOpen ? (
+            <button onClick={() => setFocusCapOpen(true)}
+              style={{ background: `${C.bgLight}ee`, backdropFilter: "blur(10px)", border: `1px solid ${C.border}`, borderRadius: 20, padding: "7px 14px", color: C.muted, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 12px rgba(0,0,0,0.3)", transition: "all 0.2s" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.gold}50`; e.currentTarget.style.color = C.gold; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}>
+              <span style={{ fontSize: 13 }}>+</span>
+              <span>Capture</span>
+              {(() => { const parkingCount = nodes.filter(n => n.cluster === "Intake Zone").length; return parkingCount > 0 ? <span style={{ background: `${C.gold}25`, color: C.gold, fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 8, marginLeft: 2 }}>{parkingCount}</span> : null; })()}
+            </button>
+          ) : (
+            <div style={{ background: `${C.bgLight}f0`, backdropFilter: "blur(12px)", border: `1px solid ${C.gold}40`, borderRadius: 14, padding: "8px 10px", display: "flex", gap: 6, alignItems: "center", boxShadow: `0 4px 20px rgba(0,0,0,0.4), 0 0 12px ${C.gold}10`, animation: "fadeSlideUp 0.2s ease-out" }}>
+              <input ref={focusCapRef} value={focusCapText} onChange={e => setFocusCapText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && focusCapText.trim()) { quickCapture(focusCapText.trim(), filter); setFocusCapText(""); setFocusCapOpen(false); }
+                  if (e.key === "Escape") { setFocusCapOpen(false); setFocusCapText(""); }
+                }}
+                placeholder="Thought for later…"
+                style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", color: C.text, fontSize: 11, outline: "none", fontFamily: "'DM Sans',sans-serif", width: 220 }} />
+              <button onClick={() => { if (focusCapText.trim()) { quickCapture(focusCapText.trim(), filter); setFocusCapText(""); setFocusCapOpen(false); } }}
+                style={{ background: C.gold, border: "none", borderRadius: 8, width: 28, height: 28, color: C.bg, fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>+</button>
+            </div>
+          )}
         </div>
       )}
 
