@@ -86,7 +86,7 @@ const stl = (s) => STATUSES[s] || STATUSES.exploring;
 /* ═══════════════════════════════════
    STORAGE via API routes → Supabase
    ═══════════════════════════════════ */
-const STORAGE_KEYS = { mapState: "anna-map-state", logs: "anna-map-logs", chat: "anna-map-chat" };
+const STORAGE_KEYS = { mapState: "anna-map-state", logs: "anna-map-logs", chat: "anna-map-chat", suggestions: "anna-map-suggestions" };
 
 async function storageGet(key) {
   try {
@@ -267,6 +267,8 @@ export default function LivingMap() {
   const [capText, setCapText] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const [suggestions, setSuggestions] = useState({});
+  const suggestionsGenerating = useRef(new Set());
   const canvasRef = useRef(null);
   const capRef = useRef(null);
   const saveTimerRef = useRef(null);
@@ -293,6 +295,15 @@ export default function LivingMap() {
         if (chat?.messages) {
           setChatMessages(chat.messages.filter(m => m.role && m.content && !m.isError && !m.content.includes("Connection error")));
         }
+        const savedSuggestions = await storageGet(STORAGE_KEYS.suggestions);
+        if (savedSuggestions) {
+          const refreshed = {};
+          for (const [k, v] of Object.entries(savedSuggestions)) {
+            if (v.dismissed) continue;
+            refreshed[k] = v;
+          }
+          setSuggestions(refreshed);
+        }
       } catch (e) {
         console.error("Load error:", e);
       } finally {
@@ -309,30 +320,88 @@ export default function LivingMap() {
       await storageSet(STORAGE_KEYS.mapState, { nodes, synergies, energySet: [...energySet] });
       await storageSet(STORAGE_KEYS.logs, { shipLog, activityLog });
       await storageSet(STORAGE_KEYS.chat, { messages: chatMessages });
+      await storageSet(STORAGE_KEYS.suggestions, suggestions);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus(""), 2000);
     } catch { setSaveStatus("error"); setTimeout(() => setSaveStatus(""), 3000); }
-  }, [loaded, nodes, synergies, energySet, shipLog, activityLog, chatMessages]);
+  }, [loaded, nodes, synergies, energySet, shipLog, activityLog, chatMessages, suggestions]);
 
   useEffect(() => {
     if (!loaded) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(saveAll, 1200);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [nodes, synergies, energySet, shipLog, activityLog, chatMessages, saveAll]);
+  }, [nodes, synergies, energySet, shipLog, activityLog, chatMessages, suggestions, saveAll]);
+
+  /* AI NEXT MOVE SUGGESTIONS */
+  const generateSuggestion = useCallback(async (nodeId) => {
+    if (suggestionsGenerating.current.has(nodeId)) return;
+    suggestionsGenerating.current.add(nodeId);
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) { suggestionsGenerating.current.delete(nodeId); return; }
+    const nodeShips = shipLog.filter(s => s.nodeId === nodeId).slice(-5);
+    const lastShipDate = nodeShips.length ? nodeShips[nodeShips.length - 1].date : null;
+    const daysSinceShip = lastShipDate ? Math.floor((Date.now() - new Date(lastShipDate).getTime()) / 86400000) : 999;
+    const connectedNodes = synergies
+      .filter(s => s.from === nodeId || s.to === nodeId)
+      .map(s => {
+        const otherId = s.from === nodeId ? s.to : s.from;
+        const other = nodes.find(n => n.id === otherId);
+        const otherShips = shipLog.filter(sl => sl.nodeId === otherId).slice(-3);
+        return { title: other?.title, type: s.type, label: s.label, recentShips: otherShips.map(sl => sl.text) };
+      });
+    const prompt = `You are a next-move advisor for Anna's project landscape. Suggest ONE specific next action.
+
+PROJECT: "${node.title}" [${node.cluster}] — Status: ${node.status}
+DESCRIPTION: ${node.desc || "None"}
+RECENT SHIPS: ${nodeShips.length ? nodeShips.map(s => `"${s.text}" (${s.date})`).join(", ") : "None yet"}
+DAYS SINCE LAST SHIP: ${daysSinceShip === 999 ? "Never shipped" : daysSinceShip}
+CONNECTED PROJECTS: ${connectedNodes.length ? connectedNodes.map(c => `"${c.title}" (${c.type}: ${c.label || "—"}) recent: ${c.recentShips.join(", ") || "none"}`).join(" | ") : "None"}
+
+RULES:
+- Start with a physical verb (open, write, send, sketch, read, list, review, draft, schedule, text, email)
+- Maximum 15 words
+- Must be completable in under 30 minutes
+- ${daysSinceShip > 7 ? "Project dormant — suggest a TINY re-entry task (5 min)." : ""}
+- ${connectedNodes.some(c => c.recentShips.length > 0) ? "A connected project shipped recently — consider cross-pollination." : ""}
+- If status is "dormant", suggest minimal warmth touch
+- If status is "shipped", suggest documentation or sharing
+
+Reply with ONLY the suggestion text. No quotes, no explanation.`;
+    try {
+      const response = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-opus-4-6", max_tokens: 60, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!response.ok) { suggestionsGenerating.current.delete(nodeId); return; }
+      const data = await response.json();
+      const text = data.content?.find(b => b.type === "text")?.text?.trim();
+      if (text && text.length > 3 && text.length < 120) {
+        setSuggestions(prev => ({ ...prev, [nodeId]: { text, dismissed: false, generatedAt: new Date().toISOString() } }));
+      }
+    } catch (err) { console.error("Suggestion failed:", err); }
+    finally { suggestionsGenerating.current.delete(nodeId); }
+  }, [nodes, shipLog, synergies]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const needsSuggestion = nodes.filter(n => !n.nextMove && n.status !== "shipped" && !suggestions[n.id]?.text && !suggestions[n.id]?.dismissed);
+    needsSuggestion.forEach((n, i) => { setTimeout(() => generateSuggestion(n.id), i * 2000); });
+  }, [loaded]);
 
   /* ACTIONS */
   const logAct = (t) => setActivityLog(p => [...p, { text: t, date: new Date().toISOString().slice(0, 10), time: new Date().toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) }]);
   const updateNode = (id, ch) => setNodes(p => p.map(n => n.id === id ? { ...n, ...ch } : n));
   const changeStatus = (id, ns) => { const n = nodes.find(x => x.id === id); if (n) { updateNode(id, { status: ns }); logAct(`${n.title}: ${stl(n.status).label} → ${stl(ns).label}`); } };
   const toggleEnergy = (id) => setEnergySet(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else { if (n.size >= 2) n.delete([...n][0]); n.add(id); } return n; });
-  const addShip = (nid, txt) => { setShipLog(p => [...p, { nodeId: nid, text: txt, date: new Date().toISOString().slice(0, 10) }]); const n = nodes.find(x => x.id === nid); logAct(`Shipped: "${txt}" (${n?.title})`); };
+  const addShip = (nid, txt) => { setShipLog(p => [...p, { nodeId: nid, text: txt, date: new Date().toISOString().slice(0, 10) }]); const n = nodes.find(x => x.id === nid); logAct(`Shipped: "${txt}" (${n?.title})`); setSuggestions(prev => { const next = { ...prev }; delete next[nid]; return next; }); };
   const addNodeFn = (title, cluster) => { const cn = nodes.filter(n => n.cluster === cluster); const x = cn.length ? cn.reduce((s, n) => s + n.x, 0) / cn.length + (Math.random() - 0.5) * 80 : 400; const y = cn.length ? Math.max(...cn.map(n => n.y)) + 50 + Math.random() * 30 : 300; const nn = { id: `n_${Date.now()}`, title, cluster, status: "exploring", x, y, desc: "", nextMove: "" }; setNodes(p => [...p, nn]); logAct(`Added: "${title}" to ${cluster}`); setSel(nn.id); setAddingNode(false); };
   const addConnectionFn = (from, to, type) => { if (from === to || synergies.some(s => (s.from === from && s.to === to) || (s.from === to && s.to === from))) return; setSynergies(p => [...p, { from, to, type, label: "" }]); const a = nodes.find(n => n.id === from); const b = nodes.find(n => n.id === to); logAct(`Connected: ${a?.title} ↔ ${b?.title}`); setAddingConn(null); };
   const removeNode = (id) => { const n = nodes.find(x => x.id === id); setNodes(p => p.filter(x => x.id !== id)); setSynergies(p => p.filter(s => s.from !== id && s.to !== id)); logAct(`Removed: "${n?.title}"`); setSel(null); };
   const removeConnection = (idx) => { const s = synergies[idx]; const a = nodes.find(n => n.id === s.from); const b = nodes.find(n => n.id === s.to); setSynergies(p => p.filter((_, i) => i !== idx)); logAct(`Disconnected: ${a?.title} ↔ ${b?.title}`); };
   const quickCapture = (txt) => { const n = { id: `cap_${Date.now()}`, title: txt.length > 50 ? txt.slice(0, 50) + "…" : txt, cluster: "Intake Zone", status: "exploring", x: 720 + Math.random() * 100, y: 510 + Math.random() * 60, desc: txt, nextMove: "" }; setNodes(p => [...p, n]); logAct(`Captured: "${n.title}"`); };
-  const resetAll = async () => { if (!confirm("Reset everything?")) return; setNodes(DEFAULT_NODES); setSynergies(DEFAULT_SYNERGIES); setEnergySet(new Set()); setShipLog([]); setActivityLog([]); setChatMessages([]); await storageDel(STORAGE_KEYS.mapState); await storageDel(STORAGE_KEYS.logs); await storageDel(STORAGE_KEYS.chat); };
+  const resetAll = async () => { if (!confirm("Reset everything?")) return; setNodes(DEFAULT_NODES); setSynergies(DEFAULT_SYNERGIES); setEnergySet(new Set()); setShipLog([]); setActivityLog([]); setChatMessages([]); setSuggestions({}); await storageDel(STORAGE_KEYS.mapState); await storageDel(STORAGE_KEYS.logs); await storageDel(STORAGE_KEYS.chat); await storageDel(STORAGE_KEYS.suggestions); };
 
   useEffect(() => { if (capOpen && capRef.current) capRef.current.focus(); }, [capOpen]);
 
@@ -444,6 +513,7 @@ export default function LivingMap() {
     const s = stl(node.status); const cl = clr(node.cluster); const isSel = sel === node.id; const isE = energySet.has(node.id);
     const isConn = addingConn && addingConn.from !== node.id;
     const dimmed = hov && hov !== node.id && !synergies.some(sy => (sy.from === hov && sy.to === node.id) || (sy.to === hov && sy.from === node.id));
+    const hasSuggestion = !node.nextMove && suggestions[node.id]?.text && !suggestions[node.id]?.dismissed;
     return (
       <div onMouseEnter={() => !addingConn && !dragNodeRef.current && setHov(node.id)} onMouseLeave={() => setHov(null)}
         onMouseDown={e => onNodeMD(e, node.id)} onTouchStart={e => onNodeMD(e, node.id)}
@@ -451,9 +521,17 @@ export default function LivingMap() {
         <div style={{ background: isSel ? `${cl.main}18` : `${C.bgLight}dd`, border: `1.5px solid ${isSel ? cl.main : isE ? C.energy : isConn ? "#fff" : `${cl.main}25`}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: isSel ? `0 0 20px ${cl.main}30` : isE ? `0 0 14px ${C.energy}25` : "0 2px 10px rgba(0,0,0,0.3)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: s.color, fontSize: 10 }}>{s.icon}</span><span style={{ color: C.muted, fontSize: 9, letterSpacing: "0.04em", textTransform: "uppercase" }}>{s.label}</span></div>
-            {isE && <span style={{ fontSize: 9, color: C.energy }}>⚡</span>}
+            <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+              {hasSuggestion && <span style={{ color: C.lavender, fontSize: 8, opacity: 0.7 }}>✦</span>}
+              {isE && <span style={{ fontSize: 9, color: C.energy }}>⚡</span>}
+            </div>
           </div>
           <div style={{ color: C.text, fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{node.title}</div>
+          {hasSuggestion && (
+            <div style={{ color: C.lavender, fontSize: 9, marginTop: 4, opacity: 0.5, fontStyle: "italic", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              ✦ {suggestions[node.id].text}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -475,6 +553,7 @@ export default function LivingMap() {
     const cl = clr(n.cluster); const isE = energySet.has(n.id);
     const nodeShips = shipLog.filter(sl => sl.nodeId === n.id);
     const nodeConns = synergies.map((sy, i) => ({ ...sy, idx: i })).filter(sy => sy.from === n.id || sy.to === n.id);
+    const suggestion = suggestions[n.id];
     const [shipInput, setShipInput] = useState(""); const [showShip, setShowShip] = useState(false);
     const [editDesc, setEditDesc] = useState(false); const [editNext, setEditNext] = useState(false);
     const [descVal, setDescVal] = useState(n.desc); const [nextVal, setNextVal] = useState(n.nextMove || "");
@@ -500,10 +579,33 @@ export default function LivingMap() {
         {n.status !== "shipped" && (
           <div style={{ ...panelBox, borderColor: n.status === "ready" ? `${C.warm}30` : C.border }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-              <span style={{ color: C.warm, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>→ Next move</span>
+              <span style={{ color: n.status === "dormant" ? C.muted : C.warm, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>{n.status === "dormant" ? "→ Keep warm" : "→ Next move"}</span>
               <button onClick={() => { if (editNext) updateNode(n.id, { nextMove: nextVal }); setEditNext(!editNext); }} style={{ background: "none", border: "none", color: C.sky, fontSize: 10, cursor: "pointer" }}>{editNext ? "Save" : "Edit"}</button>
             </div>
-            {editNext ? <textarea value={nextVal} onChange={e => setNextVal(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} /> : <p style={{ color: C.text, fontSize: 12, lineHeight: 1.5, margin: 0 }}>{n.nextMove || "None yet."}</p>}
+            {editNext ? (
+              <textarea value={nextVal} onChange={e => setNextVal(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="What's the next concrete action?" />
+            ) : n.nextMove ? (
+              <p style={{ color: C.text, fontSize: 12, lineHeight: 1.5, margin: 0 }}>{n.nextMove}</p>
+            ) : suggestion && !suggestion.dismissed ? (
+              <div>
+                <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.5, margin: 0, fontStyle: "italic", opacity: 0.7 }}>
+                  <span style={{ color: C.lavender, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontStyle: "normal", marginRight: 6 }}>AI suggests</span>
+                  {suggestion.text}
+                </p>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <button onClick={() => { updateNode(n.id, { nextMove: suggestion.text }); setNextVal(suggestion.text); logAct(`Accepted AI suggestion for ${n.title}`); }} 
+                    style={{ ...btn(C.mint, false), padding: "4px 10px", fontSize: 10 }}>✓ Accept</button>
+                  <button onClick={() => setSuggestions(prev => ({ ...prev, [n.id]: { ...prev[n.id], dismissed: true } }))}
+                    style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px", color: C.faint, fontSize: 10, cursor: "pointer" }}>Dismiss</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <p style={{ color: C.faint, fontSize: 12, margin: 0, fontStyle: "italic" }}>No next move yet.</p>
+                <button onClick={() => generateSuggestion(n.id)} 
+                  style={{ background: `${C.lavender}12`, border: `1px solid ${C.lavender}30`, borderRadius: 8, padding: "3px 10px", color: C.lavender, fontSize: 10, cursor: "pointer", whiteSpace: "nowrap" }}>✦ Ask AI</button>
+              </div>
+            )}
           </div>
         )}
         {n.shippedAs && <div style={{ ...panelBox, borderColor: `${C.mint}25` }}><span style={{ color: C.mint, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>Shipped as</span><p style={{ color: C.text, fontSize: 12, margin: "4px 0 0" }}>{n.shippedAs}</p></div>}
@@ -637,10 +739,14 @@ export default function LivingMap() {
       {view === "map" && (
         <div style={{ position: "fixed", bottom: 14, right: 14, zIndex: 150, background: `${C.bgLight}f0`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "12px 14px", border: `1px solid ${C.border}`, maxWidth: 260, maxHeight: 280, overflowY: "auto" }}>
           <div style={{ color: C.warm, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>→ Ready line</div>
-          {readyItems.slice(0, 7).map(n => (<div key={n.id} onClick={() => setSel(n.id)} style={{ marginBottom: 5, display: "flex", alignItems: "flex-start", gap: 5, cursor: "pointer", padding: "3px 4px", borderRadius: 5 }} onMouseEnter={e => e.currentTarget.style.background = C.surface} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <span style={{ color: stl(n.status).color, fontSize: 9, marginTop: 3 }}>{stl(n.status).icon}</span>
-            <div><div style={{ color: C.text, fontSize: 11, fontWeight: 500 }}>{n.title}</div>{n.nextMove && <div style={{ color: C.muted, fontSize: 9, marginTop: 1 }}>→ {n.nextMove.length > 40 ? n.nextMove.slice(0, 40) + "…" : n.nextMove}</div>}</div>
-          </div>))}
+          {readyItems.slice(0, 7).map(n => {
+            const sug = !n.nextMove && suggestions[n.id]?.text && !suggestions[n.id]?.dismissed ? suggestions[n.id].text : null;
+            const moveText = n.nextMove || sug;
+            return (<div key={n.id} onClick={() => setSel(n.id)} style={{ marginBottom: 5, display: "flex", alignItems: "flex-start", gap: 5, cursor: "pointer", padding: "3px 4px", borderRadius: 5 }} onMouseEnter={e => e.currentTarget.style.background = C.surface} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <span style={{ color: stl(n.status).color, fontSize: 9, marginTop: 3 }}>{stl(n.status).icon}</span>
+              <div><div style={{ color: C.text, fontSize: 11, fontWeight: 500 }}>{n.title}</div>{moveText && <div style={{ color: sug ? C.lavender : C.muted, fontSize: 9, marginTop: 1, fontStyle: sug ? "italic" : "normal", opacity: sug ? 0.6 : 1 }}>{sug ? "✦ " : "→ "}{moveText.length > 40 ? moveText.slice(0, 40) + "…" : moveText}</div>}</div>
+            </div>);
+          })}
         </div>
       )}
 
