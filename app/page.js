@@ -338,29 +338,51 @@ export default function LivingMap() {
 
   /* PAN + NODE DRAG + ZOOM */
   const getPointerPos = (e) => e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
-  const [dragNode, setDragNode] = useState(null);
+  const dragNodeRef = useRef(null);
   const dragNodeOffset = useRef({ x: 0, y: 0 });
+  const dragNodeStart = useRef({ x: 0, y: 0 });
   const didDragNode = useRef(false);
+  const DRAG_THRESHOLD = 5;
   const onMD = useCallback((e) => { const pos = getPointerPos(e); setDragging(true); setDragStart({ x: pos.x - pan.x, y: pos.y - pan.y }); }, [pan]);
   const onNodeMD = useCallback((e, nodeId) => {
-    e.stopPropagation();
+    e.stopPropagation(); e.preventDefault();
     const pos = getPointerPos(e);
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
+    dragNodeRef.current = nodeId;
     dragNodeOffset.current = { x: pos.x - (node.x * zoom + pan.x), y: pos.y - (node.y * zoom + pan.y) };
+    dragNodeStart.current = { x: pos.x, y: pos.y };
     didDragNode.current = false;
-    setDragNode(nodeId);
   }, [nodes, pan, zoom]);
   const onMM = useCallback((e) => {
     const pos = getPointerPos(e);
-    if (dragNode) {
-      e.preventDefault(); didDragNode.current = true;
+    if (dragNodeRef.current) {
+      e.preventDefault();
+      if (!didDragNode.current) {
+        const dx = pos.x - dragNodeStart.current.x;
+        const dy = pos.y - dragNodeStart.current.y;
+        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        didDragNode.current = true;
+      }
       const newX = (pos.x - dragNodeOffset.current.x - pan.x) / zoom;
       const newY = (pos.y - dragNodeOffset.current.y - pan.y) / zoom;
-      setNodes(prev => prev.map(n => n.id === dragNode ? { ...n, x: Math.round(newX), y: Math.round(newY) } : n));
+      setNodes(prev => prev.map(n => n.id === dragNodeRef.current ? { ...n, x: Math.round(newX), y: Math.round(newY) } : n));
     } else if (dragging) { e.preventDefault(); setPan({ x: pos.x - dragStart.x, y: pos.y - dragStart.y }); }
-  }, [dragging, dragStart, dragNode, pan, zoom]);
-  const onMU = useCallback(() => { setDragging(false); setDragNode(null); }, []);
+  }, [dragging, dragStart, pan, zoom]);
+  const onMU = useCallback(() => {
+    if (dragNodeRef.current && !didDragNode.current) {
+      if (addingConn) {
+        const from = addingConn.from; const to = dragNodeRef.current;
+        if (from !== to && !synergies.some(s => (s.from === from && s.to === to) || (s.from === to && s.to === from))) {
+          setSynergies(p => [...p, { from, to, type: addingConn.type, label: "" }]);
+          const a = nodes.find(n => n.id === from); const b = nodes.find(n => n.id === to);
+          setActivityLog(p => [...p, { text: `Connected: ${a?.title} ↔ ${b?.title}`, date: new Date().toISOString().slice(0, 10), time: new Date().toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) }]);
+          setAddingConn(null);
+        }
+      } else { setSel(dragNodeRef.current); }
+    }
+    dragNodeRef.current = null; didDragNode.current = false; setDragging(false);
+  }, [addingConn, synergies, nodes]);
   const onWheel = useCallback((e) => {
     e.preventDefault(); e.stopPropagation();
     const raw = -e.deltaY;
@@ -421,14 +443,12 @@ export default function LivingMap() {
   const Node = ({ node }) => {
     const s = stl(node.status); const cl = clr(node.cluster); const isSel = sel === node.id; const isE = energySet.has(node.id);
     const isConn = addingConn && addingConn.from !== node.id;
-    const isDragging = dragNode === node.id;
     const dimmed = hov && hov !== node.id && !synergies.some(sy => (sy.from === hov && sy.to === node.id) || (sy.to === hov && sy.from === node.id));
     return (
-      <div onMouseEnter={() => !addingConn && !dragNode && setHov(node.id)} onMouseLeave={() => setHov(null)}
+      <div onMouseEnter={() => !addingConn && !dragNodeRef.current && setHov(node.id)} onMouseLeave={() => setHov(null)}
         onMouseDown={e => onNodeMD(e, node.id)} onTouchStart={e => onNodeMD(e, node.id)}
-        onClick={(e) => { e.stopPropagation(); if (didDragNode.current) return; if (addingConn) addConnectionFn(addingConn.from, node.id, addingConn.type); else setSel(node.id); }}
-        style={{ position: "absolute", left: node.x, top: node.y, zIndex: isDragging ? 200 : isSel ? 100 : 10, transform: isSel && !isDragging ? "scale(1.06)" : isDragging ? "scale(1.08)" : "scale(1)", opacity: dimmed ? 0.18 : 1, cursor: isDragging ? "grabbing" : isConn ? "crosshair" : "grab", transition: isDragging ? "none" : "all 0.25s cubic-bezier(0.4,0,0.2,1)", userSelect: "none" }}>
-        <div style={{ background: isSel ? `${cl.main}18` : `${C.bgLight}dd`, border: `1.5px solid ${isSel ? cl.main : isE ? C.energy : isDragging ? "#fff" : isConn ? "#fff" : `${cl.main}25`}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: isDragging ? `0 8px 32px rgba(0,0,0,0.6)` : isSel ? `0 0 20px ${cl.main}30` : isE ? `0 0 14px ${C.energy}25` : "0 2px 10px rgba(0,0,0,0.3)" }}>
+        style={{ position: "absolute", left: node.x, top: node.y, zIndex: isSel ? 100 : 10, opacity: dimmed ? 0.18 : 1, cursor: isConn ? "crosshair" : "grab", transition: "opacity 0.25s", userSelect: "none" }}>
+        <div style={{ background: isSel ? `${cl.main}18` : `${C.bgLight}dd`, border: `1.5px solid ${isSel ? cl.main : isE ? C.energy : isConn ? "#fff" : `${cl.main}25`}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: isSel ? `0 0 20px ${cl.main}30` : isE ? `0 0 14px ${C.energy}25` : "0 2px 10px rgba(0,0,0,0.3)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: s.color, fontSize: 10 }}>{s.icon}</span><span style={{ color: C.muted, fontSize: 9, letterSpacing: "0.04em", textTransform: "uppercase" }}>{s.label}</span></div>
             {isE && <span style={{ fontSize: 9, color: C.energy }}>⚡</span>}
