@@ -568,9 +568,17 @@ export default function LivingMap() {
   const [harvestPrompt, setHarvestPrompt] = useState(null);
   const [celebration, setCelebration] = useState(null);
   const [pulsingNode, setPulsingNode] = useState(null);
+  const [voiceState, setVoiceState] = useState("idle"); // idle | listening | classifying | countdown
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceResult, setVoiceResult] = useState(null); // { action, nodeId, nodeTitle, text, confidence }
+  const [voiceCountdown, setVoiceCountdown] = useState(0);
   const harvestTimerRef = useRef(null);
   const celebrationTimerRef = useRef(null);
   const sessionShipCount = useRef(0);
+  const voiceRecRef = useRef(null);
+  const voiceCountdownRef = useRef(null);
+  const voiceCountdownInterval = useRef(null);
+  const hasSpeechAPI = typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   const suggestionsGenerating = useRef(new Set());
   const canvasRef = useRef(null);
   const capRef = useRef(null);
@@ -793,17 +801,159 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
   const quickCapture = (txt, capturedDuring) => { const n = { id: `cap_${Date.now()}`, title: txt.length > 50 ? txt.slice(0, 50) + "…" : txt, cluster: "Intake Zone", status: "exploring", x: 1100 + Math.random() * 100, y: 680 + Math.random() * 60, desc: txt, nextMove: "", capturedDuring: capturedDuring || null }; setNodes(p => [...p, n]); logAct(`Captured: "${n.title}"${capturedDuring ? ` (during ${capturedDuring} focus)` : ""}`); };
   const resetAll = async () => { if (!confirm("Reset everything?")) return; setNodes(DEFAULT_NODES); setSynergies(DEFAULT_SYNERGIES); setEnergyMap({}); setGravityMap({}); setShipLog([]); setActivityLog([]); setChatMessages([]); setSuggestions({}); await storageDel(STORAGE_KEYS.mapState); await storageDel(STORAGE_KEYS.logs); await storageDel(STORAGE_KEYS.chat); await storageDel(STORAGE_KEYS.suggestions); };
 
+  /* VOICE PIPELINE */
+  const cancelVoice = useCallback(() => {
+    if (voiceRecRef.current) { try { voiceRecRef.current.stop(); } catch {} voiceRecRef.current = null; }
+    if (voiceCountdownRef.current) clearTimeout(voiceCountdownRef.current);
+    if (voiceCountdownInterval.current) clearInterval(voiceCountdownInterval.current);
+    setVoiceState("idle"); setVoiceTranscript(""); setVoiceResult(null); setVoiceCountdown(0);
+  }, []);
+
+  const acceptVoiceResult = useCallback(() => {
+    if (!voiceResult) return;
+    const { action, nodeId, text } = voiceResult;
+    if (action === "ship" && nodeId) { addShip(nodeId, text); }
+    else if (action === "capture") { quickCapture(text, focusActive ? filter : null); }
+    else if (action === "nextMove" && nodeId) { updateNode(nodeId, { nextMove: text }); logAct(`Voice: next move for ${nodes.find(n => n.id === nodeId)?.title}`); }
+    if (voiceCountdownRef.current) clearTimeout(voiceCountdownRef.current);
+    if (voiceCountdownInterval.current) clearInterval(voiceCountdownInterval.current);
+    setVoiceState("idle"); setVoiceTranscript(""); setVoiceResult(null); setVoiceCountdown(0);
+  }, [voiceResult, focusActive, filter, nodes]);
+
+  const startCountdown = useCallback((result) => {
+    setVoiceResult(result);
+    setVoiceCountdown(30);
+    setVoiceState("countdown");
+    if (voiceCountdownInterval.current) clearInterval(voiceCountdownInterval.current);
+    voiceCountdownInterval.current = setInterval(() => {
+      setVoiceCountdown(prev => {
+        if (prev <= 1) { clearInterval(voiceCountdownInterval.current); return 0; }
+        return prev - 1;
+      });
+    }, 100);
+    if (voiceCountdownRef.current) clearTimeout(voiceCountdownRef.current);
+    voiceCountdownRef.current = setTimeout(() => {
+      clearInterval(voiceCountdownInterval.current);
+      setVoiceCountdown(0);
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    if (voiceCountdown === 0 && voiceState === "countdown" && voiceResult) { acceptVoiceResult(); }
+  }, [voiceCountdown, voiceState, voiceResult, acceptVoiceResult]);
+
+  const classifyVoice = useCallback(async (transcript) => {
+    setVoiceState("classifying");
+    const projectList = nodes.filter(n => n.status !== "shipped").map(n =>
+      `id:${n.id} title:"${n.title}" cluster:"${n.cluster}" status:${n.status} nextMove:"${n.nextMove || ""}"`
+    ).join("\n");
+    const prompt = `You classify voice input for a project management tool. Given the transcript and project list, determine the user's intent.
+
+PROJECTS:\n${projectList}
+
+VOICE TRANSCRIPT: "${transcript}"
+
+Classify and return ONLY valid JSON (no markdown, no backticks):
+{
+  "action": "ship" | "capture" | "nextMove",
+  "nodeId": "the project id if matched, or null for capture",
+  "text": "cleaned up version of what to log (fix obvious speech-to-text errors, keep it concise)",
+  "confidence": 0.0 to 1.0,
+  "reasoning": "one sentence explaining your classification"
+}
+
+Rules:
+- "ship" = user completed/delivered something for a specific project
+- "nextMove" = user is setting what to do next on a project
+- "capture" = general thought/idea not clearly tied to a project, or low confidence match
+- If transcript mentions a project by name or close synonym, match it
+- If intent is ambiguous, prefer "capture" with the full text
+- Clean up speech artifacts but preserve meaning`;
+
+    try {
+      const response = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!response.ok) throw new Error("API error");
+      const data = await response.json();
+      const text = data.content?.find(b => b.type === "text")?.text?.trim();
+      if (!text) throw new Error("Empty response");
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      const matchedNode = parsed.nodeId ? nodes.find(n => n.id === parsed.nodeId) : null;
+      const result = {
+        action: parsed.action || "capture",
+        nodeId: matchedNode ? parsed.nodeId : null,
+        nodeTitle: matchedNode?.title || null,
+        nodeCluster: matchedNode?.cluster || null,
+        text: parsed.text || transcript,
+        confidence: parsed.confidence || 0.5,
+        reasoning: parsed.reasoning || "",
+      };
+      if (result.confidence < 0.4) { result.action = "capture"; result.nodeId = null; result.nodeTitle = null; }
+      startCountdown(result);
+    } catch (err) {
+      console.error("Voice classify error:", err);
+      startCountdown({ action: "capture", nodeId: null, nodeTitle: null, nodeCluster: null, text: transcript, confidence: 0.3, reasoning: "Classification failed, capturing as-is" });
+    }
+  }, [nodes, startCountdown]);
+
+  const startListening = useCallback(() => {
+    if (!hasSpeechAPI) return;
+    if (voiceState !== "idle") { cancelVoice(); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    let finalTranscript = "";
+    rec.onstart = () => { setVoiceState("listening"); setVoiceTranscript(""); };
+    rec.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) { finalTranscript += event.results[i][0].transcript; }
+        else { interim += event.results[i][0].transcript; }
+      }
+      setVoiceTranscript(finalTranscript || interim);
+    };
+    rec.onend = () => {
+      voiceRecRef.current = null;
+      const t = finalTranscript.trim();
+      if (t) { classifyVoice(t); }
+      else { setVoiceState("idle"); setVoiceTranscript(""); }
+    };
+    rec.onerror = (e) => {
+      console.error("Speech error:", e.error);
+      voiceRecRef.current = null;
+      if (e.error !== "aborted") { setVoiceState("idle"); setVoiceTranscript(""); }
+    };
+    voiceRecRef.current = rec;
+    rec.start();
+  }, [voiceState, hasSpeechAPI, cancelVoice, classifyVoice]);
+
   useEffect(() => { if (capOpen && capRef.current) capRef.current.focus(); }, [capOpen]);
   useEffect(() => { if (focusCapOpen && focusCapRef.current) focusCapRef.current.focus(); }, [focusCapOpen]);
 
-  /* ESCAPE exits focus mode */
+  /* ESCAPE exits focus mode / cancels voice */
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") { if (focusCapOpen) { e.preventDefault(); setFocusCapOpen(false); setFocusCapText(""); } else if (focusActive) { e.preventDefault(); setFilter("All"); } } };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        if (voiceState !== "idle") { e.preventDefault(); cancelVoice(); }
+        else if (focusCapOpen) { e.preventDefault(); setFocusCapOpen(false); setFocusCapText(""); }
+        else if (focusActive) { e.preventDefault(); setFilter("All"); }
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusActive, focusCapOpen]);
+  }, [focusActive, focusCapOpen, voiceState, cancelVoice]);
 
   useEffect(() => { if (!focusActive) { setFocusCapOpen(false); setFocusCapText(""); } }, [focusActive]);
+
+  /* Cleanup voice on unmount */
+  useEffect(() => { return () => { if (voiceRecRef.current) try { voiceRecRef.current.stop(); } catch {} if (voiceCountdownRef.current) clearTimeout(voiceCountdownRef.current); if (voiceCountdownInterval.current) clearInterval(voiceCountdownInterval.current); }; }, []);
 
   /* PAN + NODE DRAG + ZOOM */
   const getPointerPos = (e) => e.touches?.length ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : e.changedTouches?.length ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : e.clientX !== undefined ? { x: e.clientX, y: e.clientY } : null;
@@ -1142,8 +1292,14 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
           {focusActive && <span style={{ color: C.faint, fontSize: 9, marginLeft: 4, opacity: 0.7 }}>esc to exit</span>}
         </div>}
         {saveStatus && <span style={{ fontSize: 9, color: saveStatus === "saved" ? C.mint : saveStatus === "error" ? C.red : C.muted, whiteSpace: "nowrap" }}>{saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "✓ Saved" : "Save error"}</span>}
-        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+        <div style={{ display: "flex", gap: 6, marginLeft: "auto", alignItems: "center" }}>
           {view === "map" && <button onClick={() => setAddingNode(true)} style={btn(C.sky, false)}>+ Node</button>}
+          {hasSpeechAPI && <button onClick={startListening}
+            style={{ background: voiceState === "listening" ? `${C.red}25` : "none", border: `1px solid ${voiceState === "listening" ? C.red : C.border}`, borderRadius: 8, width: 30, height: 30, color: voiceState === "listening" ? C.red : C.muted, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", transition: "all 0.2s" }}
+            title="Voice input">
+            🎤
+            {voiceState === "listening" && <div style={{ position: "absolute", inset: -2, borderRadius: 10, border: `2px solid ${C.red}`, animation: "voicePulseRing 1.5s ease-out infinite", pointerEvents: "none" }} />}
+          </button>}
           {!capOpen ? <button onClick={() => setCapOpen(true)} style={btn(C.dim, false)}>+ Capture</button> : (
             <div style={{ display: "flex", gap: 4 }}>
               <input ref={capRef} value={capText} onChange={e => setCapText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && capText.trim()) { quickCapture(capText.trim()); setCapText(""); setCapOpen(false); } if (e.key === "Escape") setCapOpen(false); }} placeholder="Quick capture…" style={{ ...inputStyle, width: 200, padding: "4px 8px", fontSize: 11 }} />
@@ -1272,6 +1428,79 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
           </div>
         </div>
       )}
+      {voiceState !== "idle" && (
+        <div style={{ position: "fixed", top: 56, left: "50%", transform: "translateX(-50%)", zIndex: 270, minWidth: 340, maxWidth: 480, animation: "fadeSlideDown 0.25s ease-out" }}>
+          <div style={{ background: C.surface, border: `1px solid ${voiceState === "listening" ? `${C.red}40` : voiceState === "classifying" ? `${C.sky}30` : `${C.mint}40`}`, borderRadius: 14, padding: "16px 20px", boxShadow: `0 8px 36px rgba(0,0,0,0.5), 0 0 20px ${voiceState === "listening" ? `${C.red}10` : voiceState === "countdown" ? `${C.mint}10` : "transparent"}`, backdropFilter: "blur(12px)" }}>
+            {/* LISTENING */}
+            {voiceState === "listening" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                    {[0, 1, 2, 3, 4].map(i => (<div key={i} style={{ width: 3, height: 8 + Math.random() * 12, background: C.red, borderRadius: 2, opacity: 0.7, animation: `voiceBar 0.5s ease-in-out ${i * 0.1}s infinite alternate` }} />))}
+                  </div>
+                  <span style={{ color: C.red, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Listening…</span>
+                </div>
+                {voiceTranscript && <div style={{ color: C.text, fontSize: 14, lineHeight: 1.5, fontStyle: "italic" }}>{voiceTranscript}</div>}
+                {!voiceTranscript && <div style={{ color: C.faint, fontSize: 12 }}>Say what you shipped, a next move, or a thought to capture…</div>}
+                <button onClick={cancelVoice} style={{ marginTop: 10, background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 12px", color: C.muted, fontSize: 10, cursor: "pointer" }}>Cancel</button>
+              </div>
+            )}
+            {/* CLASSIFYING */}
+            {voiceState === "classifying" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div style={{ display: "flex", gap: 4 }}>{[0, 1, 2].map(i => (<div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: C.sky, animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />))}</div>
+                  <span style={{ color: C.sky, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Classifying…</span>
+                </div>
+                <div style={{ color: C.text, fontSize: 13, fontStyle: "italic" }}>"{voiceTranscript}"</div>
+              </div>
+            )}
+            {/* COUNTDOWN */}
+            {voiceState === "countdown" && voiceResult && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: voiceResult.action === "ship" ? C.mint : voiceResult.action === "nextMove" ? C.warm : C.gold, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      {voiceResult.action === "ship" ? "✦ Ship" : voiceResult.action === "nextMove" ? "→ Next move" : "⬡ Capture"}
+                    </span>
+                    {voiceResult.confidence >= 0.7 && <span style={{ color: C.faint, fontSize: 9, opacity: 0.6 }}>high confidence</span>}
+                    {voiceResult.confidence < 0.7 && voiceResult.confidence >= 0.4 && <span style={{ color: C.warm, fontSize: 9, opacity: 0.6 }}>medium confidence</span>}
+                  </div>
+                  {/* Countdown ring */}
+                  <div style={{ position: "relative", width: 28, height: 28 }}>
+                    <svg width="28" height="28" style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx="14" cy="14" r="11" fill="none" stroke={C.border} strokeWidth="2" />
+                      <circle cx="14" cy="14" r="11" fill="none" stroke={C.mint} strokeWidth="2"
+                        strokeDasharray={`${2 * Math.PI * 11}`}
+                        strokeDashoffset={`${2 * Math.PI * 11 * (1 - voiceCountdown / 30)}`}
+                        strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.1s linear" }} />
+                    </svg>
+                    <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: 9, fontWeight: 600 }}>{Math.ceil(voiceCountdown / 10)}</span>
+                  </div>
+                </div>
+                <div style={{ color: C.text, fontSize: 14, fontWeight: 500, marginBottom: 4, lineHeight: 1.4 }}>"{voiceResult.text}"</div>
+                {voiceResult.nodeTitle && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <span style={{ color: C.faint, fontSize: 10 }}>→</span>
+                    <span style={{ color: CLUSTERS[voiceResult.nodeCluster]?.main || C.muted, fontSize: 11, fontWeight: 600 }}>{voiceResult.nodeTitle}</span>
+                  </div>
+                )}
+                {!voiceResult.nodeTitle && voiceResult.action === "capture" && (
+                  <div style={{ color: C.faint, fontSize: 10, marginBottom: 8 }}>→ Intake Zone</div>
+                )}
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={acceptVoiceResult} style={{ background: `${C.mint}18`, border: `1px solid ${C.mint}45`, borderRadius: 8, padding: "5px 14px", color: C.mint, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Accept now</button>
+                  <button onClick={cancelVoice} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 14px", color: C.muted, fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                  {voiceResult.nodeTitle && (
+                    <button onClick={() => { startCountdown({ ...voiceResult, action: "capture", nodeId: null, nodeTitle: null, nodeCluster: null, reasoning: "Redirected to capture" }); }}
+                      style={{ background: "none", border: `1px solid ${C.gold}30`, borderRadius: 8, padding: "5px 12px", color: C.gold, fontSize: 10, cursor: "pointer" }}>Capture instead</button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <AddModal />
       {addingConn && (<div style={{ position: "fixed", top: 50, left: "50%", transform: "translateX(-50%)", zIndex: 250, background: C.surface, border: `1px solid ${C.lavender}40`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }}>
         <span style={{ color: C.text, fontSize: 12 }}>Click a node to connect from <strong>{nodes.find(n => n.id === addingConn.from)?.title}</strong></span>
@@ -1281,10 +1510,13 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
       <svg style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, opacity: 0.02 }} width="100%" height="100%"><defs><pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5" /></pattern></defs><rect width="100%" height="100%" fill="url(#g)" /></svg>
       <style>{`
         @keyframes fadeSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes fadeSlideDown { from { opacity: 0; transform: translateX(-50%) translateY(-10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @keyframes shipPulse { 0% { box-shadow: 0 0 8px rgba(115,235,174,0.3); } 40% { box-shadow: 0 0 28px rgba(115,235,174,0.5), 0 0 56px rgba(115,235,174,0.15); } 100% { box-shadow: 0 0 8px rgba(115,235,174,0); } }
         @keyframes celebFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes celebScaleIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
         @keyframes celebBounce { 0% { opacity: 0; transform: scale(0.3) translateY(10px); } 60% { opacity: 1; transform: scale(1.15) translateY(-4px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes voicePulseRing { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.6); } }
+        @keyframes voiceBar { from { height: 6px; } to { height: 18px; } }
       `}</style>
     </div>
   );
