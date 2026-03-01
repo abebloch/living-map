@@ -37,26 +37,26 @@ const SYNERGY_TYPES = {
 };
 
 const DEFAULT_NODES = [
-  { id: "bb", title: "Bloch & Beecken", cluster: "Strategic Foresight", status: "forming", x: 140, y: 240, desc: "Your consultancy — positioning, offers, and sales assets in development.", nextMove: "Define minimum viable launch: landing page + 2 clear offers?" },
-  { id: "track", title: "Client track record", cluster: "Strategic Foresight", status: "shipped", x: 80, y: 320, desc: "Volvo, SKF, Spotify, Länsförsäkringar. Deep portfolio.", shippedAs: "Completed projects" },
-  { id: "method", title: "Foresight methodology", cluster: "Strategic Foresight", status: "exploring", x: 220, y: 170, desc: "Your evolving approach — participatory, systems-based, culturally grounded.", nextMove: "Codify into a shareable framework" },
-  { id: "studio", title: "Venture Studio", cluster: "Venture Building", status: "forming", x: 450, y: 140, desc: "Your solo venture studio.", nextMove: "Define the first venture thesis and selection criteria" },
-  { id: "palate", title: "Palate", cluster: "Venture Building", status: "forming", x: 540, y: 210, desc: "Taste-driven auction discovery. CLIP embeddings, curation logic.", nextMove: "Build a clickable prototype or demo to show 3 people" },
-  { id: "thesis", title: "Agentic disruption thesis", cluster: "Venture Building", status: "forming", x: 390, y: 210, desc: "AI agents consuming knowledge work creates new competitive dynamics.", nextMove: "Publish a condensed version" },
-  { id: "daya", title: "Daya / femtech", cluster: "Venture Building", status: "dormant", x: 530, y: 300, desc: "Partnership exploration. On hold.", nextMove: "Light touch in 2–3 months" },
-  { id: "ar", title: "AI ventures w/ Andy & Ronja", cluster: "AI & Agents", status: "exploring", x: 660, y: 130, desc: "Collaboration exploring AI agent business models.", nextMove: "Agree on one concrete build or experiment" },
-  { id: "infra", title: "Agent infrastructure", cluster: "AI & Agents", status: "exploring", x: 740, y: 200, desc: "AI agents as economic actors in European regulatory contexts.", nextMove: "Write a problem statement" },
-  { id: "econ", title: "European agent economics", cluster: "AI & Agents", status: "exploring", x: 800, y: 130, desc: "Where European regulation creates opportunity for AI agents.", nextMove: "Map 3 use cases" },
-  { id: "fhai", title: "Folkhems AI", cluster: "Societal Concepts", status: "exploring", x: 430, y: 410, desc: "With Alexandre. Societal OS combining tech sovereignty with social cohesion.", nextMove: "Clarify with Alexandre: next conversation and first deliverable?" },
-  { id: "board", title: "Medborgarskolan board", cluster: "Democratic Infrastructure", status: "shipped", x: 120, y: 470, desc: "Board role at Medborgarskolan Väst.", shippedAs: "Board position" },
-  { id: "circles", title: "Study circles as social algorithms", cluster: "Democratic Infrastructure", status: "ready", x: 240, y: 510, desc: "Folkbildning as democratic infrastructure for the AI era. Feb 20 presentation delivered.", nextMove: "Turn into a published essay or public talk" },
-  { id: "foresight_fb", title: "Folkbildning × AI foresight", cluster: "Democratic Infrastructure", status: "forming", x: 180, y: 430, desc: "Foresight analysis + strategic materials for Medborgarskolan.", nextMove: "Package EU funding analysis as board proposal" },
-  { id: "omdom", title: "AI omdömescirklar", cluster: "Democratic Infrastructure", status: "forming", x: 340, y: 465, desc: "Study circle curricula for critical AI literacy.", nextMove: "Draft pilot: 4 sessions, testable with one study circle" },
-  { id: "owl", title: "The Night Owl", cluster: "Intelligence Systems", status: "forming", x: 690, y: 350, desc: "Daily intelligence reports.", nextMove: "Ship 5 editions to a small list" },
-  { id: "hunt", title: "The Hunt", cluster: "Intelligence Systems", status: "forming", x: 790, y: 410, desc: "Venture scanner.", nextMove: "Run one full scan cycle and share the output" },
-  { id: "patron", title: "Patron (legacy)", cluster: "Culture & Curation", status: "shipped", x: 400, y: 550, desc: "Your curatorial practice — origin story.", shippedAs: "Completed body of work" },
-  { id: "taste", title: "Taste-driven discovery", cluster: "Culture & Curation", status: "exploring", x: 520, y: 540, desc: "Curation, taste, resonance.", nextMove: "Worldview or separate venture?" },
-  { id: "intake", title: "Signals & rabbit holes", cluster: "Intake Zone", status: "exploring", x: 750, y: 545, desc: "Everything new lands here.", nextMove: "Weekly review" },
+  { id: "bb", title: "Bloch & Beecken", cluster: "Strategic Foresight", status: "forming", x: 120, y: 280, desc: "Your consultancy — positioning, offers, and sales assets in development.", nextMove: "Define minimum viable launch: landing page + 2 clear offers?" },
+  { id: "track", title: "Client track record", cluster: "Strategic Foresight", status: "shipped", x: 40, y: 400, desc: "Volvo, SKF, Spotify, Länsförsäkringar. Deep portfolio.", shippedAs: "Completed projects" },
+  { id: "method", title: "Foresight methodology", cluster: "Strategic Foresight", status: "exploring", x: 280, y: 180, desc: "Your evolving approach — participatory, systems-based, culturally grounded.", nextMove: "Codify into a shareable framework" },
+  { id: "studio", title: "Venture Studio", cluster: "Venture Building", status: "forming", x: 580, y: 120, desc: "Your solo venture studio.", nextMove: "Define the first venture thesis and selection criteria" },
+  { id: "palate", title: "Palate", cluster: "Venture Building", status: "forming", x: 750, y: 220, desc: "Taste-driven auction discovery. CLIP embeddings, curation logic.", nextMove: "Build a clickable prototype or demo to show 3 people" },
+  { id: "thesis", title: "Agentic disruption thesis", cluster: "Venture Building", status: "forming", x: 520, y: 240, desc: "AI agents consuming knowledge work creates new competitive dynamics.", nextMove: "Publish a condensed version" },
+  { id: "daya", title: "Daya / femtech", cluster: "Venture Building", status: "dormant", x: 740, y: 370, desc: "Partnership exploration. On hold.", nextMove: "Light touch in 2–3 months" },
+  { id: "ar", title: "AI ventures w/ Andy & Ronja", cluster: "AI & Agents", status: "exploring", x: 1000, y: 100, desc: "Collaboration exploring AI agent business models.", nextMove: "Agree on one concrete build or experiment" },
+  { id: "infra", title: "Agent infrastructure", cluster: "AI & Agents", status: "exploring", x: 1120, y: 220, desc: "AI agents as economic actors in European regulatory contexts.", nextMove: "Write a problem statement" },
+  { id: "econ", title: "European agent economics", cluster: "AI & Agents", status: "exploring", x: 1200, y: 100, desc: "Where European regulation creates opportunity for AI agents.", nextMove: "Map 3 use cases" },
+  { id: "fhai", title: "Folkhems AI", cluster: "Societal Concepts", status: "exploring", x: 580, y: 520, desc: "With Alexandre. Societal OS combining tech sovereignty with social cohesion.", nextMove: "Clarify with Alexandre: next conversation and first deliverable?" },
+  { id: "board", title: "Medborgarskolan board", cluster: "Democratic Infrastructure", status: "shipped", x: 80, y: 620, desc: "Board role at Medborgarskolan Väst.", shippedAs: "Board position" },
+  { id: "circles", title: "Study circles as social algorithms", cluster: "Democratic Infrastructure", status: "ready", x: 300, y: 700, desc: "Folkbildning as democratic infrastructure for the AI era. Feb 20 presentation delivered.", nextMove: "Turn into a published essay or public talk" },
+  { id: "foresight_fb", title: "Folkbildning × AI foresight", cluster: "Democratic Infrastructure", status: "forming", x: 180, y: 550, desc: "Foresight analysis + strategic materials for Medborgarskolan.", nextMove: "Package EU funding analysis as board proposal" },
+  { id: "omdom", title: "AI omdömescirklar", cluster: "Democratic Infrastructure", status: "forming", x: 440, y: 620, desc: "Study circle curricula for critical AI literacy.", nextMove: "Draft pilot: 4 sessions, testable with one study circle" },
+  { id: "owl", title: "The Night Owl", cluster: "Intelligence Systems", status: "forming", x: 1020, y: 420, desc: "Daily intelligence reports.", nextMove: "Ship 5 editions to a small list" },
+  { id: "hunt", title: "The Hunt", cluster: "Intelligence Systems", status: "forming", x: 1180, y: 520, desc: "Venture scanner.", nextMove: "Run one full scan cycle and share the output" },
+  { id: "patron", title: "Patron (legacy)", cluster: "Culture & Curation", status: "shipped", x: 520, y: 780, desc: "Your curatorial practice — origin story.", shippedAs: "Completed body of work" },
+  { id: "taste", title: "Taste-driven discovery", cluster: "Culture & Curation", status: "exploring", x: 740, y: 760, desc: "Curation, taste, resonance.", nextMove: "Worldview or separate venture?" },
+  { id: "intake", title: "Signals & rabbit holes", cluster: "Intake Zone", status: "exploring", x: 1100, y: 720, desc: "Everything new lands here.", nextMove: "Weekly review" },
 ];
 
 const DEFAULT_SYNERGIES = [
@@ -90,7 +90,11 @@ const STORAGE_KEYS = { mapState: "anna-map-state", logs: "anna-map-logs", chat: 
 
 async function storageGet(key) {
   try {
-    const res = await fetch(`/api/storage?key=${encodeURIComponent(key)}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`/api/storage?key=${encodeURIComponent(key)}`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
     const data = await res.json();
     return data.value ? JSON.parse(data.value) : null;
   } catch { return null; }
@@ -98,11 +102,15 @@ async function storageGet(key) {
 
 async function storageSet(key, value) {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
     await fetch('/api/storage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key, value: JSON.stringify(value) }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
   } catch (e) { console.error('Storage save error:', e); }
 }
 
@@ -268,22 +276,27 @@ export default function LivingMap() {
   /* LOAD */
   useEffect(() => {
     (async () => {
-      const mapState = await storageGet(STORAGE_KEYS.mapState);
-      if (mapState) {
-        if (mapState.nodes?.length) setNodes(mapState.nodes);
-        if (mapState.synergies) setSynergies(mapState.synergies);
-        if (mapState.energySet) setEnergySet(new Set(mapState.energySet));
+      try {
+        const mapState = await storageGet(STORAGE_KEYS.mapState);
+        if (mapState) {
+          if (mapState.nodes?.length) setNodes(mapState.nodes);
+          if (mapState.synergies) setSynergies(mapState.synergies);
+          if (mapState.energySet) setEnergySet(new Set(mapState.energySet));
+        }
+        const logs = await storageGet(STORAGE_KEYS.logs);
+        if (logs) {
+          if (logs.shipLog) setShipLog(logs.shipLog);
+          if (logs.activityLog) setActivityLog(logs.activityLog);
+        }
+        const chat = await storageGet(STORAGE_KEYS.chat);
+        if (chat?.messages) {
+          setChatMessages(chat.messages.filter(m => m.role && m.content && !m.isError && !m.content.includes("Connection error")));
+        }
+      } catch (e) {
+        console.error("Load error:", e);
+      } finally {
+        setLoaded(true);
       }
-      const logs = await storageGet(STORAGE_KEYS.logs);
-      if (logs) {
-        if (logs.shipLog) setShipLog(logs.shipLog);
-        if (logs.activityLog) setActivityLog(logs.activityLog);
-      }
-      const chat = await storageGet(STORAGE_KEYS.chat);
-      if (chat?.messages) {
-        setChatMessages(chat.messages.filter(m => m.role && m.content && !m.isError && !m.content.includes("Connection error")));
-      }
-      setLoaded(true);
     })();
   }, []);
 
@@ -322,11 +335,31 @@ export default function LivingMap() {
 
   useEffect(() => { if (capOpen && capRef.current) capRef.current.focus(); }, [capOpen]);
 
-  /* PAN */
+  /* PAN + NODE DRAG */
   const getPointerPos = (e) => e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+  const [dragNode, setDragNode] = useState(null);
+  const dragNodeOffset = useRef({ x: 0, y: 0 });
+  const didDragNode = useRef(false);
   const onMD = useCallback((e) => { const pos = getPointerPos(e); setDragging(true); setDragStart({ x: pos.x - pan.x, y: pos.y - pan.y }); }, [pan]);
-  const onMM = useCallback((e) => { if (!dragging) return; e.preventDefault(); const pos = getPointerPos(e); setPan({ x: pos.x - dragStart.x, y: pos.y - dragStart.y }); }, [dragging, dragStart]);
-  const onMU = useCallback(() => setDragging(false), []);
+  const onNodeMD = useCallback((e, nodeId) => {
+    e.stopPropagation();
+    const pos = getPointerPos(e);
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    dragNodeOffset.current = { x: pos.x - (node.x + pan.x), y: pos.y - (node.y + pan.y) };
+    didDragNode.current = false;
+    setDragNode(nodeId);
+  }, [nodes, pan]);
+  const onMM = useCallback((e) => {
+    const pos = getPointerPos(e);
+    if (dragNode) {
+      e.preventDefault(); didDragNode.current = true;
+      const newX = pos.x - dragNodeOffset.current.x - pan.x;
+      const newY = pos.y - dragNodeOffset.current.y - pan.y;
+      setNodes(prev => prev.map(n => n.id === dragNode ? { ...n, x: Math.round(newX), y: Math.round(newY) } : n));
+    } else if (dragging) { e.preventDefault(); setPan({ x: pos.x - dragStart.x, y: pos.y - dragStart.y }); }
+  }, [dragging, dragStart, dragNode, pan]);
+  const onMU = useCallback(() => { setDragging(false); setDragNode(null); }, []);
   useEffect(() => { window.addEventListener("mousemove", onMM); window.addEventListener("mouseup", onMU); window.addEventListener("touchmove", onMM, { passive: false }); window.addEventListener("touchend", onMU); return () => { window.removeEventListener("mousemove", onMM); window.removeEventListener("mouseup", onMU); window.removeEventListener("touchmove", onMM); window.removeEventListener("touchend", onMU); }; }, [onMM, onMU]);
 
   const pill = (active, color) => ({ background: active ? `${color}20` : "transparent", border: `1px solid ${active ? `${color}55` : C.border}`, borderRadius: 14, padding: "3px 10px", color: active ? color : C.muted, fontSize: 10, fontWeight: active ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" });
@@ -363,13 +396,14 @@ export default function LivingMap() {
   const Node = ({ node }) => {
     const s = stl(node.status); const cl = clr(node.cluster); const isSel = sel === node.id; const isE = energySet.has(node.id);
     const isConn = addingConn && addingConn.from !== node.id;
+    const isDragging = dragNode === node.id;
     const dimmed = hov && hov !== node.id && !synergies.some(sy => (sy.from === hov && sy.to === node.id) || (sy.to === hov && sy.from === node.id));
     return (
-      <div onMouseEnter={() => !addingConn && setHov(node.id)} onMouseLeave={() => setHov(null)}
-        onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
-        onClick={() => { if (addingConn) addConnectionFn(addingConn.from, node.id, addingConn.type); else setSel(node.id); }}
-        style={{ position: "absolute", left: node.x, top: node.y, zIndex: isSel ? 100 : 10, transform: isSel ? "scale(1.06)" : "scale(1)", opacity: dimmed ? 0.18 : 1, cursor: isConn ? "crosshair" : "pointer", transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}>
-        <div style={{ background: isSel ? `${cl.main}18` : `${C.bgLight}dd`, border: `1.5px solid ${isSel ? cl.main : isE ? C.energy : isConn ? "#fff" : `${cl.main}25`}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: isSel ? `0 0 20px ${cl.main}30` : isE ? `0 0 14px ${C.energy}25` : "0 2px 10px rgba(0,0,0,0.3)" }}>
+      <div onMouseEnter={() => !addingConn && !dragNode && setHov(node.id)} onMouseLeave={() => setHov(null)}
+        onMouseDown={e => onNodeMD(e, node.id)} onTouchStart={e => onNodeMD(e, node.id)}
+        onClick={(e) => { e.stopPropagation(); if (didDragNode.current) return; if (addingConn) addConnectionFn(addingConn.from, node.id, addingConn.type); else setSel(node.id); }}
+        style={{ position: "absolute", left: node.x, top: node.y, zIndex: isDragging ? 200 : isSel ? 100 : 10, transform: isSel && !isDragging ? "scale(1.06)" : isDragging ? "scale(1.08)" : "scale(1)", opacity: dimmed ? 0.18 : 1, cursor: isDragging ? "grabbing" : isConn ? "crosshair" : "grab", transition: isDragging ? "none" : "all 0.25s cubic-bezier(0.4,0,0.2,1)", userSelect: "none" }}>
+        <div style={{ background: isSel ? `${cl.main}18` : `${C.bgLight}dd`, border: `1.5px solid ${isSel ? cl.main : isE ? C.energy : isDragging ? "#fff" : isConn ? "#fff" : `${cl.main}25`}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: isDragging ? `0 8px 32px rgba(0,0,0,0.6)` : isSel ? `0 0 20px ${cl.main}30` : isE ? `0 0 14px ${C.energy}25` : "0 2px 10px rgba(0,0,0,0.3)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: s.color, fontSize: 10 }}>{s.icon}</span><span style={{ color: C.muted, fontSize: 9, letterSpacing: "0.04em", textTransform: "uppercase" }}>{s.label}</span></div>
             {isE && <span style={{ fontSize: 9, color: C.energy }}>⚡</span>}
