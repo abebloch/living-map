@@ -37,26 +37,26 @@ const SYNERGY_TYPES = {
 };
 
 const DEFAULT_NODES = [
-  { id: "bb", title: "Bloch & Beecken", cluster: "Strategic Foresight", status: "forming", x: 120, y: 280, desc: "Your consultancy — positioning, offers, and sales assets in development.", nextMove: "Define minimum viable launch: landing page + 2 clear offers?" },
-  { id: "track", title: "Client track record", cluster: "Strategic Foresight", status: "shipped", x: 40, y: 400, desc: "Volvo, SKF, Spotify, Länsförsäkringar. Deep portfolio.", shippedAs: "Completed projects" },
-  { id: "method", title: "Foresight methodology", cluster: "Strategic Foresight", status: "exploring", x: 280, y: 180, desc: "Your evolving approach — participatory, systems-based, culturally grounded.", nextMove: "" },
-  { id: "studio", title: "Venture Studio", cluster: "Venture Building", status: "forming", x: 580, y: 120, desc: "Your solo venture studio.", nextMove: "Define the first venture thesis and selection criteria" },
-  { id: "palate", title: "Palate", cluster: "Venture Building", status: "forming", x: 750, y: 220, desc: "Taste-driven auction discovery. CLIP embeddings, curation logic.", nextMove: "Build a clickable prototype or demo to show 3 people" },
-  { id: "thesis", title: "Agentic disruption thesis", cluster: "Venture Building", status: "forming", x: 520, y: 240, desc: "AI agents consuming knowledge work creates new competitive dynamics.", nextMove: "Publish a condensed version" },
-  { id: "daya", title: "Daya / femtech", cluster: "Venture Building", status: "dormant", x: 740, y: 370, desc: "Partnership exploration. On hold.", nextMove: "Light touch in 2–3 months" },
-  { id: "ar", title: "AI ventures w/ Andy & Ronja", cluster: "AI & Agents", status: "exploring", x: 1000, y: 100, desc: "Collaboration exploring AI agent business models.", nextMove: "Agree on one concrete build or experiment" },
-  { id: "infra", title: "Agent infrastructure", cluster: "AI & Agents", status: "exploring", x: 1120, y: 220, desc: "AI agents as economic actors in European regulatory contexts.", nextMove: "Write a problem statement" },
-  { id: "econ", title: "European agent economics", cluster: "AI & Agents", status: "exploring", x: 1200, y: 100, desc: "Where European regulation creates opportunity for AI agents.", nextMove: "Map 3 use cases" },
-  { id: "fhai", title: "Folkhems AI", cluster: "Societal Concepts", status: "exploring", x: 580, y: 520, desc: "With Alexandre. Societal OS combining tech sovereignty with social cohesion.", nextMove: "Clarify with Alexandre: next conversation and first deliverable?" },
-  { id: "board", title: "Medborgarskolan board", cluster: "Democratic Infrastructure", status: "shipped", x: 80, y: 620, desc: "Board role at Medborgarskolan Väst.", shippedAs: "Board position" },
-  { id: "circles", title: "Study circles as social algorithms", cluster: "Democratic Infrastructure", status: "ready", x: 300, y: 700, desc: "Folkbildning as democratic infrastructure for the AI era. Feb 20 presentation delivered.", nextMove: "Turn into a published essay or public talk" },
-  { id: "foresight_fb", title: "Folkbildning × AI foresight", cluster: "Democratic Infrastructure", status: "forming", x: 180, y: 550, desc: "Foresight analysis + strategic materials for Medborgarskolan.", nextMove: "Package EU funding analysis as board proposal" },
-  { id: "omdom", title: "AI omdömescirklar", cluster: "Democratic Infrastructure", status: "forming", x: 440, y: 620, desc: "Study circle curricula for critical AI literacy.", nextMove: "Draft pilot: 4 sessions, testable with one study circle" },
-  { id: "owl", title: "The Night Owl", cluster: "Intelligence Systems", status: "forming", x: 1020, y: 420, desc: "Daily intelligence reports.", nextMove: "Ship 5 editions to a small list" },
-  { id: "hunt", title: "The Hunt", cluster: "Intelligence Systems", status: "forming", x: 1180, y: 520, desc: "Venture scanner.", nextMove: "Run one full scan cycle and share the output" },
-  { id: "patron", title: "Patron (legacy)", cluster: "Culture & Curation", status: "shipped", x: 520, y: 780, desc: "Your curatorial practice — origin story.", shippedAs: "Completed body of work" },
-  { id: "taste", title: "Taste-driven discovery", cluster: "Culture & Curation", status: "exploring", x: 740, y: 760, desc: "Curation, taste, resonance.", nextMove: "" },
-  { id: "intake", title: "Signals & rabbit holes", cluster: "Intake Zone", status: "exploring", x: 1100, y: 720, desc: "Everything new lands here.", nextMove: "" },
+  { id: "bb", title: "Bloch & Beecken", cluster: "Strategic Foresight", status: "forming", x: 120, y: 280, desc: "Your consultancy — positioning, offers, and sales assets in development.", nextSteps: [{ id: "s_0", text: "Define minimum viable launch: landing page + 2 clear offers?", done: false }] },
+  { id: "track", title: "Client track record", cluster: "Strategic Foresight", status: "shipped", x: 40, y: 400, desc: "Volvo, SKF, Spotify, Länsförsäkringar. Deep portfolio.", shippedAs: "Completed projects", nextSteps: [] },
+  { id: "method", title: "Foresight methodology", cluster: "Strategic Foresight", status: "exploring", x: 280, y: 180, desc: "Your evolving approach — participatory, systems-based, culturally grounded.", nextSteps: [] },
+  { id: "studio", title: "Venture Studio", cluster: "Venture Building", status: "forming", x: 580, y: 120, desc: "Your solo venture studio.", nextSteps: [{ id: "s_0", text: "Define the first venture thesis and selection criteria", done: false }] },
+  { id: "palate", title: "Palate", cluster: "Venture Building", status: "forming", x: 750, y: 220, desc: "Taste-driven auction discovery. CLIP embeddings, curation logic.", nextSteps: [{ id: "s_0", text: "Build a clickable prototype or demo to show 3 people", done: false }] },
+  { id: "thesis", title: "Agentic disruption thesis", cluster: "Venture Building", status: "forming", x: 520, y: 240, desc: "AI agents consuming knowledge work creates new competitive dynamics.", nextSteps: [{ id: "s_0", text: "Publish a condensed version", done: false }] },
+  { id: "daya", title: "Daya / femtech", cluster: "Venture Building", status: "dormant", x: 740, y: 370, desc: "Partnership exploration. On hold.", nextSteps: [{ id: "s_0", text: "Light touch in 2–3 months", done: false }] },
+  { id: "ar", title: "AI ventures w/ Andy & Ronja", cluster: "AI & Agents", status: "exploring", x: 1000, y: 100, desc: "Collaboration exploring AI agent business models.", nextSteps: [{ id: "s_0", text: "Agree on one concrete build or experiment", done: false }] },
+  { id: "infra", title: "Agent infrastructure", cluster: "AI & Agents", status: "exploring", x: 1120, y: 220, desc: "AI agents as economic actors in European regulatory contexts.", nextSteps: [{ id: "s_0", text: "Write a problem statement", done: false }] },
+  { id: "econ", title: "European agent economics", cluster: "AI & Agents", status: "exploring", x: 1200, y: 100, desc: "Where European regulation creates opportunity for AI agents.", nextSteps: [{ id: "s_0", text: "Map 3 use cases", done: false }] },
+  { id: "fhai", title: "Folkhems AI", cluster: "Societal Concepts", status: "exploring", x: 580, y: 520, desc: "With Alexandre. Societal OS combining tech sovereignty with social cohesion.", nextSteps: [{ id: "s_0", text: "Clarify with Alexandre: next conversation and first deliverable?", done: false }] },
+  { id: "board", title: "Medborgarskolan board", cluster: "Democratic Infrastructure", status: "shipped", x: 80, y: 620, desc: "Board role at Medborgarskolan Väst.", shippedAs: "Board position", nextSteps: [] },
+  { id: "circles", title: "Study circles as social algorithms", cluster: "Democratic Infrastructure", status: "ready", x: 300, y: 700, desc: "Folkbildning as democratic infrastructure for the AI era. Feb 20 presentation delivered.", nextSteps: [{ id: "s_0", text: "Turn into a published essay or public talk", done: false }] },
+  { id: "foresight_fb", title: "Folkbildning × AI foresight", cluster: "Democratic Infrastructure", status: "forming", x: 180, y: 550, desc: "Foresight analysis + strategic materials for Medborgarskolan.", nextSteps: [{ id: "s_0", text: "Package EU funding analysis as board proposal", done: false }] },
+  { id: "omdom", title: "AI omdömescirklar", cluster: "Democratic Infrastructure", status: "forming", x: 440, y: 620, desc: "Study circle curricula for critical AI literacy.", nextSteps: [{ id: "s_0", text: "Draft pilot: 4 sessions, testable with one study circle", done: false }] },
+  { id: "owl", title: "The Night Owl", cluster: "Intelligence Systems", status: "forming", x: 1020, y: 420, desc: "Daily intelligence reports.", nextSteps: [{ id: "s_0", text: "Ship 5 editions to a small list", done: false }] },
+  { id: "hunt", title: "The Hunt", cluster: "Intelligence Systems", status: "forming", x: 1180, y: 520, desc: "Venture scanner.", nextSteps: [{ id: "s_0", text: "Run one full scan cycle and share the output", done: false }] },
+  { id: "patron", title: "Patron (legacy)", cluster: "Culture & Curation", status: "shipped", x: 520, y: 780, desc: "Your curatorial practice — origin story.", shippedAs: "Completed body of work", nextSteps: [] },
+  { id: "taste", title: "Taste-driven discovery", cluster: "Culture & Curation", status: "exploring", x: 740, y: 760, desc: "Curation, taste, resonance.", nextSteps: [] },
+  { id: "intake", title: "Signals & rabbit holes", cluster: "Intake Zone", status: "exploring", x: 1100, y: 720, desc: "Everything new lands here.", nextSteps: [] },
 ];
 
 const DEFAULT_SYNERGIES = [
@@ -92,6 +92,12 @@ const GRAVITY_LEVELS = {
   normal: { scale: 1.0, label: "Normal", color: C.muted },
   light: { scale: 0.82, label: "Light", color: C.faint },
 };
+
+/* NEXT STEPS HELPERS */
+const getSteps = (node) => node.nextSteps || (node.nextMove ? [{ id: "s_0", text: node.nextMove, done: false }] : []);
+const pendingSteps = (node) => getSteps(node).filter(s => !s.done);
+const firstPending = (node) => pendingSteps(node)[0]?.text || "";
+const hasAnySteps = (node) => getSteps(node).length > 0;
 
 const clr = (c) => CLUSTERS[c] || { main: C.muted, bg: C.dim };
 const stl = (s) => STATUSES[s] || STATUSES.exploring;
@@ -149,7 +155,7 @@ function ClaudePanel({ nodes, synergies, shipLog, activityLog, energyMap, gravit
       const ships = shipLog.filter(s => s.nodeId === n.id).length;
       const isEnergy = energyMap[n.id];
       const isGravity = gravityMap[n.id];
-      return `"${n.title}" [${n.cluster}] ${n.status}${isEnergy ? ` energy:${isEnergy}` : ""}${isGravity ? ` gravity:${isGravity}` : ""} | Next: ${n.nextMove || "—"} | ${conns} connections, ${ships} ships`;
+      return `"${n.title}" [${n.cluster}] ${n.status}${isEnergy ? ` energy:${isEnergy}` : ""}${isGravity ? ` gravity:${isGravity}` : ""} | Steps: ${pendingSteps(n).map(s => s.text).join("; ") || "—"} | ${conns} connections, ${ships} ships`;
     }).join("\n");
     const recentShips = shipLog.slice(-5).map(s => { const n = nodes.find(x => x.id === s.nodeId); return `${s.date}: "${s.text}" (${n?.title})`; }).join("\n");
     const recentActivity = activityLog.slice(-8).map(a => `${a.date}: ${a.text}`).join("\n");
@@ -564,6 +570,8 @@ export default function LivingMap() {
   const [focusCapText, setFocusCapText] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
   const [suggestions, setSuggestions] = useState({});
   const [harvestPrompt, setHarvestPrompt] = useState(null);
   const [celebration, setCelebration] = useState(null);
@@ -598,7 +606,14 @@ export default function LivingMap() {
       try {
         const mapState = await storageGet(STORAGE_KEYS.mapState);
         if (mapState) {
-          if (mapState.nodes?.length) setNodes(mapState.nodes);
+          if (mapState.nodes?.length) {
+            const migratedNodes = mapState.nodes.map(n => {
+              if (n.nextSteps) return n;
+              if (n.nextMove) return { ...n, nextSteps: [{ id: "s_0", text: n.nextMove, done: false }], nextMove: undefined };
+              return { ...n, nextSteps: [], nextMove: undefined };
+            });
+            setNodes(migratedNodes);
+          }
           if (mapState.synergies) setSynergies(mapState.synergies);
           if (mapState.energyMap) setEnergyMap(mapState.energyMap);
           if (mapState.gravityMap) setGravityMap(mapState.gravityMap);
@@ -708,7 +723,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
 
   useEffect(() => {
     if (!loaded) return;
-    const needsSuggestion = nodes.filter(n => !n.nextMove && n.status !== "shipped" && !suggestions[n.id]?.text && !suggestions[n.id]?.dismissed);
+    const needsSuggestion = nodes.filter(n => pendingSteps(n).length === 0 && n.status !== "shipped" && !suggestions[n.id]?.text && !suggestions[n.id]?.dismissed);
     needsSuggestion.forEach((n, i) => { setTimeout(() => generateSuggestion(n.id), i * 2000); });
   }, [loaded]);
 
@@ -794,11 +809,11 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
     setSuggestions(prev => { const next = { ...prev }; delete next[nid]; return next; });
     setTimeout(() => checkSynergyHarvest(nid, txt), 600);
   };
-  const addNodeFn = (title, cluster) => { const cn = nodes.filter(n => n.cluster === cluster); const x = cn.length ? cn.reduce((s, n) => s + n.x, 0) / cn.length + (Math.random() - 0.5) * 80 : 400; const y = cn.length ? Math.max(...cn.map(n => n.y)) + 50 + Math.random() * 30 : 300; const nn = { id: `n_${Date.now()}`, title, cluster, status: "exploring", x, y, desc: "", nextMove: "" }; setNodes(p => [...p, nn]); logAct(`Added: "${title}" to ${cluster}`); setSel(nn.id); setAddingNode(false); };
+  const addNodeFn = (title, cluster) => { const cn = nodes.filter(n => n.cluster === cluster); const x = cn.length ? cn.reduce((s, n) => s + n.x, 0) / cn.length + (Math.random() - 0.5) * 80 : 400; const y = cn.length ? Math.max(...cn.map(n => n.y)) + 50 + Math.random() * 30 : 300; const nn = { id: `n_${Date.now()}`, title, cluster, status: "exploring", x, y, desc: "", nextSteps: [] }; setNodes(p => [...p, nn]); logAct(`Added: "${title}" to ${cluster}`); setSel(nn.id); setAddingNode(false); };
   const addConnectionFn = (from, to, type) => { if (from === to || synergies.some(s => (s.from === from && s.to === to) || (s.from === to && s.to === from))) return; setSynergies(p => [...p, { from, to, type, label: "" }]); const a = nodes.find(n => n.id === from); const b = nodes.find(n => n.id === to); logAct(`Connected: ${a?.title} ↔ ${b?.title}`); setAddingConn(null); };
   const removeNode = (id) => { const n = nodes.find(x => x.id === id); setNodes(p => p.filter(x => x.id !== id)); setSynergies(p => p.filter(s => s.from !== id && s.to !== id)); logAct(`Removed: "${n?.title}"`); setSel(null); };
   const removeConnection = (idx) => { const s = synergies[idx]; const a = nodes.find(n => n.id === s.from); const b = nodes.find(n => n.id === s.to); setSynergies(p => p.filter((_, i) => i !== idx)); logAct(`Disconnected: ${a?.title} ↔ ${b?.title}`); };
-  const quickCapture = (txt, capturedDuring) => { const n = { id: `cap_${Date.now()}`, title: txt.length > 50 ? txt.slice(0, 50) + "…" : txt, cluster: "Intake Zone", status: "exploring", x: 1100 + Math.random() * 100, y: 680 + Math.random() * 60, desc: txt, nextMove: "", capturedDuring: capturedDuring || null }; setNodes(p => [...p, n]); logAct(`Captured: "${n.title}"${capturedDuring ? ` (during ${capturedDuring} focus)` : ""}`); };
+  const quickCapture = (txt, capturedDuring) => { const n = { id: `cap_${Date.now()}`, title: txt.length > 50 ? txt.slice(0, 50) + "…" : txt, cluster: "Intake Zone", status: "exploring", x: 1100 + Math.random() * 100, y: 680 + Math.random() * 60, desc: txt, nextSteps: [], capturedDuring: capturedDuring || null }; setNodes(p => [...p, n]); logAct(`Captured: "${n.title}"${capturedDuring ? ` (during ${capturedDuring} focus)` : ""}`); };
   const resetAll = async () => { if (!confirm("Reset everything?")) return; setNodes(DEFAULT_NODES); setSynergies(DEFAULT_SYNERGIES); setEnergyMap({}); setGravityMap({}); setShipLog([]); setActivityLog([]); setChatMessages([]); setSuggestions({}); await storageDel(STORAGE_KEYS.mapState); await storageDel(STORAGE_KEYS.logs); await storageDel(STORAGE_KEYS.chat); await storageDel(STORAGE_KEYS.suggestions); };
 
   /* VOICE PIPELINE */
@@ -814,7 +829,12 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
     const { action, nodeId, text } = voiceResult;
     if (action === "ship" && nodeId) { addShip(nodeId, text); }
     else if (action === "capture") { quickCapture(text, focusActive ? filter : null); }
-    else if (action === "nextMove" && nodeId) { updateNode(nodeId, { nextMove: text }); logAct(`Voice: next move for ${nodes.find(n => n.id === nodeId)?.title}`); }
+    else if (action === "nextMove" && nodeId) {
+      const node = nodes.find(n => n.id === nodeId);
+      const steps = getSteps(node || {});
+      updateNode(nodeId, { nextSteps: [...steps, { id: `s_${Date.now()}`, text, done: false }] });
+      logAct(`Voice: added step for ${node?.title}`);
+    }
     if (voiceCountdownRef.current) clearTimeout(voiceCountdownRef.current);
     if (voiceCountdownInterval.current) clearInterval(voiceCountdownInterval.current);
     setVoiceState("idle"); setVoiceTranscript(""); setVoiceResult(null); setVoiceCountdown(0);
@@ -845,7 +865,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
   const classifyVoice = useCallback(async (transcript) => {
     setVoiceState("classifying");
     const projectList = nodes.filter(n => n.status !== "shipped").map(n =>
-      `id:${n.id} title:"${n.title}" cluster:"${n.cluster}" status:${n.status} nextMove:"${n.nextMove || ""}"`
+      `id:${n.id} title:"${n.title}" cluster:"${n.cluster}" status:${n.status} steps:"${pendingSteps(n).map(s=>s.text).join("; ") || "none"}"`
     ).join("\n");
     const prompt = `You classify voice input for a project management tool. Given the transcript and project list, determine the user's intent.
 
@@ -955,6 +975,20 @@ Rules:
   /* Cleanup voice on unmount */
   useEffect(() => { return () => { if (voiceRecRef.current) try { voiceRecRef.current.stop(); } catch {} if (voiceCountdownRef.current) clearTimeout(voiceCountdownRef.current); if (voiceCountdownInterval.current) clearInterval(voiceCountdownInterval.current); }; }, []);
 
+  /* Mobile detection */
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check(); window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  /* Prevent browser zoom on double tap */
+  useEffect(() => {
+    let existing = document.querySelector('meta[name="viewport"]');
+    if (existing) { existing.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"); }
+    else { const meta = document.createElement("meta"); meta.name = "viewport"; meta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"; document.head.appendChild(meta); }
+  }, []);
+
   /* PAN + NODE DRAG + ZOOM */
   const getPointerPos = (e) => e.touches?.length ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : e.changedTouches?.length ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : e.clientX !== undefined ? { x: e.clientX, y: e.clientY } : null;
   const dragNodeRef = useRef(null);
@@ -1034,6 +1068,37 @@ Rules:
     };
   }, [onMM, onMU, onWheel]);
 
+  /* PINCH-TO-ZOOM */
+  const lastPinchDist = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) { lastPinchDist.current = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+    };
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2 && lastPinchDist.current) {
+        e.preventDefault();
+        const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        const scale = dist / lastPinchDist.current;
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        setZoom(z => {
+          const nz = Math.min(3, Math.max(0.15, z * scale));
+          const s = nz / z;
+          setPan(p => ({ x: cx - s * (cx - p.x), y: cy - s * (cy - p.y) }));
+          return nz;
+        });
+        lastPinchDist.current = dist;
+      }
+    };
+    const onTouchEnd = () => { lastPinchDist.current = null; };
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd);
+    return () => { canvas.removeEventListener("touchstart", onTouchStart); canvas.removeEventListener("touchmove", onTouchMove); canvas.removeEventListener("touchend", onTouchEnd); };
+  }, []);
+
   const pill = (active, color) => ({ background: active ? `${color}20` : "transparent", border: `1px solid ${active ? `${color}55` : C.border}`, borderRadius: 14, padding: "3px 10px", color: active ? color : C.muted, fontSize: 10, fontWeight: active ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" });
   const btn = (color, filled) => ({ background: filled ? color : `${color}15`, border: `1px solid ${color}40`, borderRadius: 8, padding: "5px 12px", color: filled ? C.bg : color, fontSize: 11, fontWeight: 600, cursor: "pointer" });
   const inputStyle = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", color: C.text, fontSize: 12, outline: "none", fontFamily: "'DM Sans',sans-serif", width: "100%" };
@@ -1071,7 +1136,7 @@ Rules:
     const grav = GRAVITY_LEVELS[gravityMap[node.id]] || GRAVITY_LEVELS.normal;
     const isConn = addingConn && addingConn.from !== node.id;
     const dimmed = hov && hov !== node.id && !synergies.some(sy => (sy.from === hov && sy.to === node.id) || (sy.to === hov && sy.from === node.id));
-    const hasSuggestion = !node.nextMove && suggestions[node.id]?.text && !suggestions[node.id]?.dismissed;
+    const hasSuggestion = pendingSteps(node).length === 0 && suggestions[node.id]?.text && !suggestions[node.id]?.dismissed;
     const isDormant = node.status === "dormant";
     const isFocused = !focusActive || focusedIds.has(node.id);
     const isConnToFocus = focusActive && connectedToFocus.has(node.id);
@@ -1124,12 +1189,21 @@ Rules:
     const nodeShips = shipLog.filter(sl => sl.nodeId === n.id);
     const nodeConns = synergies.map((sy, i) => ({ ...sy, idx: i })).filter(sy => sy.from === n.id || sy.to === n.id);
     const suggestion = suggestions[n.id];
+    const [editDesc, setEditDesc] = useState(false);
+    const [descVal, setDescVal] = useState(n.desc);
     const [shipInput, setShipInput] = useState(""); const [showShip, setShowShip] = useState(false);
-    const [editDesc, setEditDesc] = useState(false); const [editNext, setEditNext] = useState(false);
-    const [descVal, setDescVal] = useState(n.desc); const [nextVal, setNextVal] = useState(n.nextMove || "");
-    useEffect(() => { setDescVal(n.desc); setNextVal(n.nextMove || ""); setEditDesc(false); setEditNext(false); }, [n.id]);
+    const [newStepText, setNewStepText] = useState("");
+    const [editingStepId, setEditingStepId] = useState(null);
+    const [editStepVal, setEditStepVal] = useState("");
+    const steps = getSteps(n);
+    const pending = pendingSteps(n);
+    useEffect(() => { setDescVal(n.desc); setEditDesc(false); setNewStepText(""); setEditingStepId(null); }, [n.id]);
+    const toggleStep = (stepId) => { updateNode(n.id, { nextSteps: steps.map(s => s.id === stepId ? { ...s, done: !s.done } : s) }); };
+    const removeStep = (stepId) => { updateNode(n.id, { nextSteps: steps.filter(s => s.id !== stepId) }); };
+    const addStep = (text) => { if (!text.trim()) return; updateNode(n.id, { nextSteps: [...steps, { id: `s_${Date.now()}`, text: text.trim(), done: false }] }); setNewStepText(""); };
+    const saveEditStep = (stepId) => { if (!editStepVal.trim()) return; updateNode(n.id, { nextSteps: steps.map(s => s.id === stepId ? { ...s, text: editStepVal.trim() } : s) }); setEditingStepId(null); };
     return (
-      <div style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: 390, background: C.bgLight, borderLeft: `1px solid ${C.border}`, padding: "24px 20px", zIndex: 200, overflowY: "auto", boxShadow: "-6px 0 30px rgba(0,0,0,0.5)" }}>
+      <div style={isMobile ? {} : { position: "fixed", right: 0, top: 0, bottom: 0, width: 390, background: C.bgLight, borderLeft: `1px solid ${C.border}`, padding: "24px 20px", zIndex: 200, overflowY: "auto", boxShadow: "-6px 0 30px rgba(0,0,0,0.5)" }}>
         <button onClick={() => setSel(null)} style={{ position: "absolute", top: 12, right: 14, background: "none", border: "none", color: C.muted, fontSize: 16, cursor: "pointer" }}>✕</button>
         <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
           <span style={{ padding: "3px 9px", borderRadius: 14, background: `${cl.main}15`, color: cl.main, fontSize: 10, fontWeight: 600 }}>{n.cluster}</span>
@@ -1159,31 +1233,61 @@ Rules:
         </div>
         {n.status !== "shipped" && (
           <div style={{ ...panelBox, borderColor: n.status === "ready" ? `${C.warm}30` : C.border }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-              <span style={{ color: n.status === "dormant" ? C.muted : C.warm, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>{n.status === "dormant" ? "→ Keep warm" : "→ Next move"}</span>
-              <button onClick={() => { if (editNext) updateNode(n.id, { nextMove: nextVal }); setEditNext(!editNext); }} style={{ background: "none", border: "none", color: C.sky, fontSize: 10, cursor: "pointer" }}>{editNext ? "Save" : "Edit"}</button>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ color: n.status === "dormant" ? C.muted : C.warm, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>{n.status === "dormant" ? "→ Keep warm" : `→ Next steps (${pending.length}/${steps.length})`}</span>
             </div>
-            {editNext ? (
-              <textarea value={nextVal} onChange={e => setNextVal(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="What's the next concrete action?" />
-            ) : n.nextMove ? (
-              <p style={{ color: C.text, fontSize: 12, lineHeight: 1.5, margin: 0 }}>{n.nextMove}</p>
-            ) : suggestion && !suggestion.dismissed ? (
-              <div>
-                <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.5, margin: 0, fontStyle: "italic", opacity: 0.7 }}>
+            {steps.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+                {steps.map(step => (
+                  <div key={step.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 0", borderBottom: `1px solid ${C.border}30` }}>
+                    <button onClick={() => toggleStep(step.id)}
+                      style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${step.done ? C.mint : C.faint}`, background: step.done ? `${C.mint}20` : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      {step.done && <span style={{ color: C.mint, fontSize: 10, fontWeight: 700 }}>✓</span>}
+                    </button>
+                    {editingStepId === step.id ? (
+                      <div style={{ flex: 1, display: "flex", gap: 4 }}>
+                        <input value={editStepVal} onChange={e => setEditStepVal(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") saveEditStep(step.id); if (e.key === "Escape") setEditingStepId(null); }}
+                          style={{ ...inputStyle, flex: 1, padding: "3px 6px", fontSize: 11 }} autoFocus />
+                        <button onClick={() => saveEditStep(step.id)} style={{ background: "none", border: "none", color: C.sky, fontSize: 10, cursor: "pointer" }}>✓</button>
+                      </div>
+                    ) : (
+                      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span onClick={() => { setEditingStepId(step.id); setEditStepVal(step.text); }}
+                          style={{ color: step.done ? C.faint : C.text, fontSize: 12, lineHeight: 1.4, textDecoration: step.done ? "line-through" : "none", cursor: "text", flex: 1 }}>{step.text}</span>
+                        <button onClick={() => removeStep(step.id)} style={{ background: "none", border: "none", color: C.faint, fontSize: 10, cursor: "pointer", opacity: 0.4, flexShrink: 0 }}>✕</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Add step input */}
+            <div style={{ display: "flex", gap: 4 }}>
+              <input value={newStepText} onChange={e => setNewStepText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") addStep(newStepText); }}
+                placeholder="Add a step…" style={{ ...inputStyle, flex: 1, padding: "5px 8px", fontSize: 11 }} />
+              <button onClick={() => addStep(newStepText)} style={{ ...btn(C.warm, newStepText.trim().length > 0), padding: "4px 10px", fontSize: 10 }}>+</button>
+            </div>
+            {/* AI suggestion */}
+            {pending.length === 0 && suggestion && !suggestion.dismissed && (
+              <div style={{ marginTop: 8, padding: "8px 10px", background: `${C.lavender}08`, borderRadius: 8, border: `1px solid ${C.lavender}15` }}>
+                <p style={{ color: C.muted, fontSize: 11, lineHeight: 1.5, margin: "0 0 6px", fontStyle: "italic" }}>
                   <span style={{ color: C.lavender, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontStyle: "normal", marginRight: 6 }}>AI suggests</span>
                   {suggestion.text}
                 </p>
-                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                  <button onClick={() => { updateNode(n.id, { nextMove: suggestion.text }); setNextVal(suggestion.text); logAct(`Accepted AI suggestion for ${n.title}`); }} 
-                    style={{ ...btn(C.mint, false), padding: "4px 10px", fontSize: 10 }}>✓ Accept</button>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => { addStep(suggestion.text); logAct(`Accepted AI suggestion for ${n.title}`); }}
+                    style={{ ...btn(C.mint, false), padding: "3px 10px", fontSize: 10 }}>✓ Add as step</button>
                   <button onClick={() => setSuggestions(prev => ({ ...prev, [n.id]: { ...prev[n.id], dismissed: true } }))}
-                    style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px", color: C.faint, fontSize: 10, cursor: "pointer" }}>Dismiss</button>
+                    style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "3px 10px", color: C.faint, fontSize: 10, cursor: "pointer" }}>Dismiss</button>
                 </div>
               </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <p style={{ color: C.faint, fontSize: 12, margin: 0, fontStyle: "italic" }}>No next move yet.</p>
-                <button onClick={() => generateSuggestion(n.id)} 
+            )}
+            {pending.length === 0 && !suggestion?.text && !suggestion?.dismissed && (
+              <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                <p style={{ color: C.faint, fontSize: 11, margin: 0, fontStyle: "italic" }}>No pending steps.</p>
+                <button onClick={() => generateSuggestion(n.id)}
                   style={{ background: `${C.lavender}12`, border: `1px solid ${C.lavender}30`, borderRadius: 8, padding: "3px 10px", color: C.lavender, fontSize: 10, cursor: "pointer", whiteSpace: "nowrap" }}>✦ Ask AI</button>
               </div>
             )}
@@ -1280,27 +1384,27 @@ Rules:
   return (
     <div style={{ width: "100vw", height: "100vh", background: `radial-gradient(ellipse at 25% 35%, ${C.bgLight} 0%, ${C.bg} 60%)`, overflow: "hidden", position: "relative" }}>
       {/* TOP BAR */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 210, background: `${C.bg}ee`, backdropFilter: "blur(14px)", borderBottom: `1px solid ${C.border}`, padding: "10px 18px", display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 700, color: C.text, marginRight: 10, whiteSpace: "nowrap" }}>Anna's Living Map</div>
-        <div style={{ display: "flex", gap: 2, marginRight: 8 }}>
-          {[["map", "Map"], ["connections", "Connections"], ["log", "Log"], ["review", "Review"], ["claude", "Claude"]].map(([v, l]) => (
-            <button key={v} onClick={() => setView(v)} style={{ ...pill(view === v, v === "claude" ? C.lavender : v === "review" ? C.gold : C.text), ...(v === "claude" && view !== "claude" ? { borderColor: `${C.lavender}40` } : {}), ...(v === "review" && view !== "review" ? { borderColor: `${C.gold}30` } : {}) }}>{v === "claude" ? "💬 " + l : v === "review" ? "📋 " + l : l}</button>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 210, background: `${C.bg}ee`, backdropFilter: "blur(14px)", borderBottom: `1px solid ${C.border}`, padding: isMobile ? "8px 10px" : "10px 18px", display: "flex", alignItems: "center", gap: isMobile ? 4 : 8, flexWrap: isMobile ? "wrap" : "nowrap" }}>
+        {!isMobile && <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 700, color: C.text, marginRight: 10, whiteSpace: "nowrap" }}>Anna's Living Map</div>}
+        <div style={{ display: "flex", gap: 2, marginRight: isMobile ? 0 : 8, overflowX: isMobile ? "auto" : "visible", WebkitOverflowScrolling: "touch", flexShrink: 0 }}>
+          {[["map", "Map"], ["connections", "Conn"], ["log", "Log"], ["review", "Review"], ["claude", "Claude"]].map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{ ...pill(view === v, v === "claude" ? C.lavender : v === "review" ? C.gold : C.text), ...(v === "claude" && view !== "claude" ? { borderColor: `${C.lavender}40` } : {}), ...(v === "review" && view !== "review" ? { borderColor: `${C.gold}30` } : {}), whiteSpace: "nowrap", minHeight: isMobile ? 32 : "auto" }}>{v === "claude" ? "💬 " + l : v === "review" ? "📋 " + l : l}</button>
           ))}
         </div>
-        {view === "map" && <div style={{ display: "flex", gap: 2, flex: 1, flexWrap: "wrap", alignItems: "center" }}>
-          {["All", ...Object.keys(CLUSTERS)].filter(c => c === "All" || nodes.some(n => n.cluster === c)).map(c => (<button key={c} onClick={() => setFilter(f => f === c ? "All" : c)} style={pill(filter === c, c === "All" ? C.text : CLUSTERS[c].main)}>{c === "All" ? "All" : c.split(" ").slice(0, 2).join(" ")}</button>))}
+        {view === "map" && <div style={{ display: "flex", gap: 2, flex: 1, flexWrap: isMobile ? "nowrap" : "wrap", alignItems: "center", overflowX: isMobile ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
+          {["All", ...Object.keys(CLUSTERS)].filter(c => c === "All" || nodes.some(n => n.cluster === c)).map(c => (<button key={c} onClick={() => setFilter(f => f === c ? "All" : c)} style={{ ...pill(filter === c, c === "All" ? C.text : CLUSTERS[c].main), whiteSpace: "nowrap", minHeight: isMobile ? 32 : "auto" }}>{c === "All" ? "All" : c.split(" ").slice(0, 2).join(" ")}</button>))}
           {focusActive && <span style={{ color: C.faint, fontSize: 9, marginLeft: 4, opacity: 0.7 }}>esc to exit</span>}
         </div>}
         {saveStatus && <span style={{ fontSize: 9, color: saveStatus === "saved" ? C.mint : saveStatus === "error" ? C.red : C.muted, whiteSpace: "nowrap" }}>{saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "✓ Saved" : "Save error"}</span>}
-        <div style={{ display: "flex", gap: 6, marginLeft: "auto", alignItems: "center" }}>
-          {view === "map" && <button onClick={() => setAddingNode(true)} style={btn(C.sky, false)}>+ Node</button>}
+        <div style={{ display: "flex", gap: isMobile ? 4 : 6, marginLeft: "auto", alignItems: "center", flexShrink: 0 }}>
+          {view === "map" && !isMobile && <button onClick={() => setAddingNode(true)} style={btn(C.sky, false)}>+ Node</button>}
           {hasSpeechAPI && <button onClick={startListening}
-            style={{ background: voiceState === "listening" ? `${C.red}25` : "none", border: `1px solid ${voiceState === "listening" ? C.red : C.border}`, borderRadius: 8, width: 30, height: 30, color: voiceState === "listening" ? C.red : C.muted, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", transition: "all 0.2s" }}
+            style={{ background: voiceState === "listening" ? `${C.red}25` : "none", border: `1px solid ${voiceState === "listening" ? C.red : C.border}`, borderRadius: 8, width: isMobile ? 36 : 30, height: isMobile ? 36 : 30, color: voiceState === "listening" ? C.red : C.muted, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", transition: "all 0.2s" }}
             title="Voice input">
             🎤
             {voiceState === "listening" && <div style={{ position: "absolute", inset: -2, borderRadius: 10, border: `2px solid ${C.red}`, animation: "voicePulseRing 1.5s ease-out infinite", pointerEvents: "none" }} />}
           </button>}
-          {!capOpen ? <button onClick={() => setCapOpen(true)} style={btn(C.dim, false)}>+ Capture</button> : (
+          {!capOpen ? <button onClick={() => isMobile ? setCapOpen(true) : setCapOpen(true)} style={{ ...btn(C.dim, false), minHeight: isMobile ? 32 : "auto" }}>{isMobile ? "+" : "+ Capture"}</button> : (
             <div style={{ display: "flex", gap: 4 }}>
               <input ref={capRef} value={capText} onChange={e => setCapText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && capText.trim()) { quickCapture(capText.trim()); setCapText(""); setCapOpen(false); } if (e.key === "Escape") setCapOpen(false); }} placeholder="Quick capture…" style={{ ...inputStyle, width: 200, padding: "4px 8px", fontSize: 11 }} />
               <button onClick={() => { if (capText.trim()) { quickCapture(capText.trim()); setCapText(""); setCapOpen(false); } }} style={btn(C.dim, true)}>+</button>
@@ -1310,7 +1414,7 @@ Rules:
       </div>
 
       {view === "map" && (
-        <div ref={canvasRef} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+        <div ref={canvasRef} style={{ position: "absolute", inset: 0, overflow: "hidden", touchAction: "none" }}>
           <div onMouseDown={onMD} onTouchStart={onMD} style={{ position: "absolute", inset: 0, zIndex: 1, cursor: dragging ? "grabbing" : "grab" }} />
           <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0", position: "relative", width: "100%", height: "100%", zIndex: 2, pointerEvents: "none" }}>
             <Blobs />
@@ -1325,12 +1429,12 @@ Rules:
       {view === "review" && <ReviewPanel nodes={nodes} synergies={synergies} shipLog={shipLog} energyMap={energyMap} gravityMap={gravityMap} setGravityMap={setGravityMap} setNodes={setNodes} setView={setView} />}
       {view === "claude" && <ClaudePanel nodes={nodes} synergies={synergies} shipLog={shipLog} activityLog={activityLog} energyMap={energyMap} gravityMap={gravityMap} messages={chatMessages} setMessages={setChatMessages} />}
 
-      {view === "map" && (
+      {view === "map" && !isMobile && (
         <div style={{ position: "fixed", bottom: 14, right: 14, zIndex: 150, background: `${C.bgLight}f0`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "12px 14px", border: `1px solid ${C.border}`, maxWidth: 260, maxHeight: 280, overflowY: "auto" }}>
           <div style={{ color: C.warm, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>→ Ready line</div>
           {readyItems.slice(0, 7).map(n => {
-            const sug = !n.nextMove && suggestions[n.id]?.text && !suggestions[n.id]?.dismissed ? suggestions[n.id].text : null;
-            const moveText = n.nextMove || sug;
+            const sug = pendingSteps(n).length === 0 && suggestions[n.id]?.text && !suggestions[n.id]?.dismissed ? suggestions[n.id].text : null;
+            const moveText = firstPending(n) || sug;
             return (<div key={n.id} onClick={() => setSel(n.id)} style={{ marginBottom: 5, display: "flex", alignItems: "flex-start", gap: 5, cursor: "pointer", padding: "3px 4px", borderRadius: 5 }} onMouseEnter={e => e.currentTarget.style.background = C.surface} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <span style={{ color: stl(n.status).color, fontSize: 9, marginTop: 3 }}>{stl(n.status).icon}</span>
               <div><div style={{ color: C.text, fontSize: 11, fontWeight: 500 }}>{n.title}</div>{moveText && <div style={{ color: sug ? C.lavender : C.muted, fontSize: 9, marginTop: 1, fontStyle: sug ? "italic" : "normal", opacity: sug ? 0.6 : 1 }}>{sug ? "✦ " : "→ "}{moveText.length > 40 ? moveText.slice(0, 40) + "…" : moveText}</div>}</div>
@@ -1367,33 +1471,37 @@ Rules:
       )}
 
       {view === "map" && (
-        <div style={{ position: "fixed", bottom: 14, left: 14, zIndex: 150, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ position: "fixed", bottom: isMobile ? 8 : 14, left: isMobile ? 8 : 14, zIndex: 150, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ background: `${C.bgLight}e8`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "6px 8px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 4 }}>
-            <button onClick={() => { const nz = Math.max(0.15, zoom * 0.8); const cx = window.innerWidth / 2; const cy = window.innerHeight / 2; const s = nz / zoom; setPan(p => ({ x: cx - s * (cx - p.x), y: cy - s * (cy - p.y) })); setZoom(nz); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, width: 26, height: 26, color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+            <button onClick={() => { const nz = Math.max(0.15, zoom * 0.8); const cx = window.innerWidth / 2; const cy = window.innerHeight / 2; const s = nz / zoom; setPan(p => ({ x: cx - s * (cx - p.x), y: cy - s * (cy - p.y) })); setZoom(nz); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, width: isMobile ? 36 : 26, height: isMobile ? 36 : 26, color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
             <span style={{ color: C.muted, fontSize: 10, minWidth: 36, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-            <button onClick={() => { const nz = Math.min(3, zoom * 1.25); const cx = window.innerWidth / 2; const cy = window.innerHeight / 2; const s = nz / zoom; setPan(p => ({ x: cx - s * (cx - p.x), y: cy - s * (cy - p.y) })); setZoom(nz); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, width: 26, height: 26, color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-            <button onClick={() => { setZoom(0.65); setPan({ x: 0, y: 0 }); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", color: C.muted, fontSize: 9, cursor: "pointer" }}>Fit</button>
+            <button onClick={() => { const nz = Math.min(3, zoom * 1.25); const cx = window.innerWidth / 2; const cy = window.innerHeight / 2; const s = nz / zoom; setPan(p => ({ x: cx - s * (cx - p.x), y: cy - s * (cy - p.y) })); setZoom(nz); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, width: isMobile ? 36 : 26, height: isMobile ? 36 : 26, color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+            <button onClick={() => { setZoom(0.65); setPan({ x: 0, y: 0 }); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", color: C.muted, fontSize: 9, cursor: "pointer", minHeight: isMobile ? 36 : "auto" }}>Fit</button>
+            {isMobile && <button onClick={() => setAddingNode(true)} style={{ ...btn(C.sky, false), minHeight: 36 }}>+</button>}
           </div>
-          <div style={{ background: `${C.bgLight}e8`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "10px 12px", border: `1px solid ${C.border}` }}>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {Object.entries(STATUSES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ color: v.color, fontSize: 10 }}>{v.icon}</span><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+          {!isMobile && (
+            <div style={{ background: `${C.bgLight}e8`, backdropFilter: "blur(10px)", borderRadius: 11, padding: "10px 12px", border: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {Object.entries(STATUSES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ color: v.color, fontSize: 10 }}>{v.icon}</span><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
+                {Object.entries(SYNERGY_TYPES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 14, height: 2, background: v.color, borderRadius: 1 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
+                {Object.entries(ENERGY_LEVELS).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: v.color, opacity: 0.7 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+                <div style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 8, height: 8, borderRadius: "50%", border: `1px solid ${C.faint}`, opacity: 0.5 }} /><span style={{ color: C.muted, fontSize: 9 }}>None</span></div>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 5, alignItems: "center" }}>
+                <span style={{ color: C.faint, fontSize: 8, fontWeight: 600, textTransform: "uppercase" }}>Size</span>
+                {Object.entries(GRAVITY_LEVELS).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: k === "heavy" ? 10 : k === "normal" ? 7 : 5, height: k === "heavy" ? 10 : k === "normal" ? 7 : 5, borderRadius: 2, background: C.muted, opacity: 0.4 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
-              {Object.entries(SYNERGY_TYPES).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 14, height: 2, background: v.color, borderRadius: 1 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
-            </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
-              {Object.entries(ENERGY_LEVELS).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: v.color, opacity: 0.7 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
-              <div style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 8, height: 8, borderRadius: "50%", border: `1px solid ${C.faint}`, opacity: 0.5 }} /><span style={{ color: C.muted, fontSize: 9 }}>None</span></div>
-            </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 5, alignItems: "center" }}>
-              <span style={{ color: C.faint, fontSize: 8, fontWeight: 600, textTransform: "uppercase" }}>Size</span>
-              {Object.entries(GRAVITY_LEVELS).map(([k, v]) => (<div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: k === "heavy" ? 10 : k === "normal" ? 7 : 5, height: k === "heavy" ? 10 : k === "normal" ? 7 : 5, borderRadius: 2, background: C.muted, opacity: 0.4 }} /><span style={{ color: C.muted, fontSize: 9 }}>{v.label}</span></div>))}
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {selNode && view === "map" && (<><div onClick={() => setSel(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 195 }} /><Detail /></>)}
+      {selNode && view === "map" && (<><div onClick={() => setSel(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 195 }} />
+        <div style={isMobile ? { position: "fixed", left: 0, right: 0, bottom: 0, maxHeight: "80vh", background: C.bgLight, borderTop: `1px solid ${C.border}`, padding: "20px 16px", zIndex: 200, overflowY: "auto", boxShadow: "0 -6px 30px rgba(0,0,0,0.5)", borderRadius: "16px 16px 0 0" } : {}}><Detail /></div></>)}
       {harvestPrompt && (
         <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 260, background: C.surface, border: `1px solid ${SYNERGY_TYPES[harvestPrompt.synergyType]?.color || C.lavender}40`, borderRadius: 14, padding: "14px 18px", maxWidth: 420, boxShadow: `0 8px 32px rgba(0,0,0,0.5), 0 0 20px ${SYNERGY_TYPES[harvestPrompt.synergyType]?.color || C.lavender}15`, backdropFilter: "blur(12px)", animation: "fadeSlideUp 0.35s ease-out" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
