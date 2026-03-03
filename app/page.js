@@ -106,7 +106,7 @@ const nrg = (id, map) => map[id] ? ENERGY_LEVELS[map[id]] : null;
 /* ═══════════════════════════════════
    STORAGE via API routes → Supabase
    ═══════════════════════════════════ */
-const STORAGE_KEYS = { mapState: "anna-map-state", logs: "anna-map-logs", chat: "anna-map-chat", suggestions: "anna-map-suggestions" };
+const STORAGE_KEYS = { mapState: "anna-map-state", logs: "anna-map-logs", chat: "anna-map-chat", suggestions: "anna-map-suggestions", today: "anna-map-today" };
 
 async function storageGet(key) {
   try {
@@ -257,6 +257,188 @@ NODES:\n${nodesSummary}\n\nRECENT SHIPS:\n${recentShips || "None."}\n\nACTIVITY:
           <div style={{ marginTop: 10 }}>
             <button onClick={() => { setMessages([]); storageDel(STORAGE_KEYS.chat); }}
               style={{ background: `${C.red}15`, border: `1px solid ${C.red}30`, borderRadius: 8, padding: "6px 14px", color: C.red, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Clear chat</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
+   TODAY VIEW
+   ═══════════════════════════════════ */
+function TodayPanel({ nodes, synergies, shipLog, energyMap, gravityMap, suggestions, todayList, setTodayList, todayLoading, setTodayLoading, todayCompleted, setTodayCompleted, todaySkipped, setTodaySkipped, todayCacheTime, addShip, logAct }) {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const weekShips = shipLog.filter(s => s.date >= sevenDaysAgo);
+  const parkingCount = nodes.filter(n => n.cluster === "Intake Zone").length;
+  const allDone = todayList && todayList.length > 0 && todayList.every(t => todayCompleted.includes(t.projectId) || todaySkipped.includes(t.projectId));
+
+  const generateToday = async () => {
+    if (todayLoading) return;
+    // Use cache if less than 30 min old
+    if (todayList && todayCacheTime.current && Date.now() - todayCacheTime.current < 30 * 60 * 1000) return;
+    setTodayLoading(true);
+    const projectData = nodes.filter(n => n.status !== "shipped" && n.status !== "dormant").map(n => {
+      const ships = weekShips.filter(s => s.nodeId === n.id);
+      const lastShip = shipLog.filter(s => s.nodeId === n.id).slice(-1)[0];
+      const daysSince = lastShip ? Math.floor((Date.now() - new Date(lastShip.date).getTime()) / 86400000) : 999;
+      const conns = synergies.filter(s => s.from === n.id || s.to === n.id).map(s => {
+        const otherId = s.from === n.id ? s.to : s.from;
+        const other = nodes.find(x => x.id === otherId);
+        return `→ ${other?.title} (${s.type}${s.label ? ": " + s.label : ""})`;
+      });
+      const steps = pendingSteps(n);
+      return `id:${n.id} "${n.title}" [${n.cluster}] gravity:${gravityMap[n.id] || "normal"} energy:${energyMap[n.id] || "none"} ships_7d:${ships.length} days_since:${daysSince} steps:"${steps.map(s => s.text).join("; ") || "none"}" connections:[${conns.join(", ")}]`;
+    }).join("\n");
+
+    const clusterTemps = {};
+    weekShips.forEach(s => { const n = nodes.find(x => x.id === s.nodeId); if (n) clusterTemps[n.cluster] = (clusterTemps[n.cluster] || 0) + 1; });
+
+    const prompt = `You build a focused daily task list for Anna's project management system. Based on the full project state, suggest 3-5 highest-leverage tasks for today.
+
+PROJECTS:\n${projectData}
+
+CLUSTER TEMPERATURES (ships this week): ${Object.entries(clusterTemps).sort((a,b) => b[1]-a[1]).map(([c,n]) => `${c}: ${n}`).join(", ") || "None"}
+
+PARKING LOT: ${parkingCount} unprocessed items
+SKIPPED TODAY: ${todaySkipped.length > 0 ? todaySkipped.join(", ") : "none"}
+
+Return ONLY valid JSON (no markdown, no backticks) as an array:
+[
+  {
+    "projectId": "the project id",
+    "task": "specific task starting with a physical verb, under 15 words",
+    "reason": "why this ranks here, max 15 words",
+    "rank": 1
+  }
+]
+
+Ranking factors (in order of weight):
+1. Gravity level — heavy projects come first
+2. Cluster temperature — cold high-gravity clusters get priority
+3. Synergy multiplier — tasks feeding multiple projects rank higher
+4. Dormancy — projects untouched 7+ days get a boost
+- Use the project's pending steps as the task if available. Only generate a new task if steps are empty.
+- If parking lot has 5+ items, include "Sort your parking lot (${parkingCount} ideas waiting)" with projectId "parking"
+- Exclude any project IDs in the skipped list
+- Do NOT suggest more than one task per project
+- Always start tasks with a physical verb (open, write, send, sketch, review, list, draft)
+- Return exactly 3-5 items`;
+
+    try {
+      const response = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!response.ok) throw new Error("API error " + response.status);
+      const data = await response.json();
+      const text = data.content?.find(b => b.type === "text")?.text?.trim();
+      if (text) {
+        const clean = text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean);
+        if (Array.isArray(parsed)) {
+          setTodayList(parsed.sort((a, b) => a.rank - b.rank));
+          todayCacheTime.current = Date.now();
+        }
+      }
+    } catch (err) { console.error("Today generation error:", err); }
+    finally { setTodayLoading(false); }
+  };
+
+  useEffect(() => { generateToday(); }, []);
+
+  const completeTask = (item) => {
+    if (item.projectId === "parking") {
+      // Can't "ship" parking lot sorting, just mark done
+      setTodayCompleted(p => [...p, "parking"]);
+      logAct("Today: sorted parking lot");
+      return;
+    }
+    addShip(item.projectId, item.task);
+    setTodayCompleted(p => [...p, item.projectId]);
+  };
+
+  const skipTask = (item) => {
+    setTodaySkipped(p => [...p, item.projectId]);
+    logAct(`Today: skipped "${item.task}"`);
+  };
+
+  const visibleItems = todayList ? todayList.filter(t => !todayCompleted.includes(t.projectId) && !todaySkipped.includes(t.projectId)) : [];
+  const completedCount = todayCompleted.length;
+
+  return (
+    <div style={{ position: "fixed", left: 0, top: 48, bottom: 0, width: "100%", background: C.bg, zIndex: 180, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "36px 24px", maxWidth: 560, margin: "0 auto", width: "100%" }}>
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ color: C.text, fontSize: 22, fontWeight: 700, margin: "0 0 6px", fontFamily: "'Playfair Display',serif" }}>Today</h2>
+          <p style={{ color: C.muted, fontSize: 12, margin: 0 }}>
+            {todayLoading ? "Building your focus list…" : todayList ? `${visibleItems.length} tasks remaining` : "Loading…"}
+          </p>
+        </div>
+
+        {todayLoading && !todayList && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ background: C.surface, borderRadius: 12, padding: "20px", border: `1px solid ${C.border}`, opacity: 0.5 + i * 0.15 }}>
+                <div style={{ width: "60%", height: 12, background: C.border, borderRadius: 4, marginBottom: 8 }} />
+                <div style={{ width: "40%", height: 8, background: C.border, borderRadius: 4, opacity: 0.5 }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {allDone && (
+          <div style={{ paddingTop: 40, textAlign: "center" }}>
+            <div style={{ color: C.text, fontSize: 16, fontWeight: 600, fontFamily: "'Playfair Display',serif", marginBottom: 8 }}>Day complete.</div>
+            <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.6 }}>You moved {completedCount} project{completedCount !== 1 ? "s" : ""} forward today.</p>
+          </div>
+        )}
+
+        {!allDone && todayList && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {visibleItems.map((item, idx) => {
+              const node = nodes.find(n => n.id === item.projectId);
+              const cl = node ? CLUSTERS[node.cluster] : null;
+              const isParking = item.projectId === "parking";
+              return (
+                <div key={item.projectId} style={{ background: C.surface, borderRadius: 12, padding: "16px 18px", border: `1px solid ${idx === 0 ? `${C.warm}25` : C.border}`, transition: "all 0.3s" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                    <div style={{ color: idx === 0 ? C.warm : C.faint, fontSize: 18, fontWeight: 700, fontFamily: "'Playfair Display',serif", minWidth: 24, paddingTop: 2 }}>{idx + 1}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: C.text, fontSize: 14, fontWeight: 500, lineHeight: 1.5, marginBottom: 4 }}>{item.task}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                        {!isParking && cl && <span style={{ color: cl.main, fontSize: 10, fontWeight: 600 }}>{node.title}</span>}
+                        {!isParking && cl && <span style={{ color: C.faint, fontSize: 9 }}>·</span>}
+                        {!isParking && cl && <span style={{ color: C.faint, fontSize: 9 }}>{node.cluster}</span>}
+                        {isParking && <span style={{ color: C.gold, fontSize: 10, fontWeight: 600 }}>Intake Zone</span>}
+                      </div>
+                      <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.4, fontStyle: "italic" }}>{item.reason}</div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <button onClick={() => completeTask(item)}
+                          style={{ background: `${C.mint}15`, border: `1px solid ${C.mint}40`, borderRadius: 8, padding: "6px 14px", color: C.mint, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>✓ Done</button>
+                        <button onClick={() => skipTask(item)}
+                          style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.faint, fontSize: 11, cursor: "pointer" }}>Not today</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {todayList && !allDone && completedCount > 0 && (
+          <div style={{ marginTop: 16, padding: "10px 14px", background: `${C.mint}08`, borderRadius: 10, border: `1px solid ${C.mint}15` }}>
+            <span style={{ color: C.mint, fontSize: 11 }}>✓ {completedCount} completed</span>
+            {todaySkipped.length > 0 && <span style={{ color: C.faint, fontSize: 11, marginLeft: 10 }}>· {todaySkipped.length} skipped</span>}
+          </div>
+        )}
+
+        {todayList && !todayLoading && (
+          <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
+            <button onClick={() => { todayCacheTime.current = null; setTodayList(null); setTodayCompleted([]); generateToday(); }}
+              style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.faint, fontSize: 10, cursor: "pointer" }}>↻ Refresh list</button>
           </div>
         )}
       </div>
@@ -580,6 +762,11 @@ export default function LivingMap() {
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceResult, setVoiceResult] = useState(null); // { action, nodeId, nodeTitle, text, confidence }
   const [voiceCountdown, setVoiceCountdown] = useState(0);
+  const [todayList, setTodayList] = useState(null);
+  const [todayLoading, setTodayLoading] = useState(false);
+  const [todayCompleted, setTodayCompleted] = useState([]);
+  const [todaySkipped, setTodaySkipped] = useState([]);
+  const todayCacheTime = useRef(null);
   const harvestTimerRef = useRef(null);
   const celebrationTimerRef = useRef(null);
   const sessionShipCount = useRef(0);
@@ -641,6 +828,10 @@ export default function LivingMap() {
           }
           setSuggestions(refreshed);
         }
+        const savedToday = await storageGet(STORAGE_KEYS.today);
+        if (savedToday?.date === new Date().toISOString().slice(0, 10)) {
+          if (savedToday.skipped) setTodaySkipped(savedToday.skipped);
+        }
       } catch (e) {
         console.error("Load error:", e);
       } finally {
@@ -658,10 +849,11 @@ export default function LivingMap() {
       await storageSet(STORAGE_KEYS.logs, { shipLog, activityLog });
       await storageSet(STORAGE_KEYS.chat, { messages: chatMessages });
       await storageSet(STORAGE_KEYS.suggestions, suggestions);
+      await storageSet(STORAGE_KEYS.today, { skipped: todaySkipped, date: new Date().toISOString().slice(0, 10) });
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus(""), 2000);
     } catch { setSaveStatus("error"); setTimeout(() => setSaveStatus(""), 3000); }
-  }, [loaded, nodes, synergies, energyMap, gravityMap, shipLog, activityLog, chatMessages, suggestions]);
+  }, [loaded, nodes, synergies, energyMap, gravityMap, shipLog, activityLog, chatMessages, suggestions, todaySkipped]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -709,7 +901,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
       const response = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 60, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-opus-4-6", max_tokens: 60, messages: [{ role: "user", content: prompt }] }),
       });
       if (!response.ok) { suggestionsGenerating.current.delete(nodeId); return; }
       const data = await response.json();
@@ -814,7 +1006,7 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
   const removeNode = (id) => { const n = nodes.find(x => x.id === id); setNodes(p => p.filter(x => x.id !== id)); setSynergies(p => p.filter(s => s.from !== id && s.to !== id)); logAct(`Removed: "${n?.title}"`); setSel(null); };
   const removeConnection = (idx) => { const s = synergies[idx]; const a = nodes.find(n => n.id === s.from); const b = nodes.find(n => n.id === s.to); setSynergies(p => p.filter((_, i) => i !== idx)); logAct(`Disconnected: ${a?.title} ↔ ${b?.title}`); };
   const quickCapture = (txt, capturedDuring) => { const n = { id: `cap_${Date.now()}`, title: txt.length > 50 ? txt.slice(0, 50) + "…" : txt, cluster: "Intake Zone", status: "exploring", x: 1100 + Math.random() * 100, y: 680 + Math.random() * 60, desc: txt, nextSteps: [], capturedDuring: capturedDuring || null }; setNodes(p => [...p, n]); logAct(`Captured: "${n.title}"${capturedDuring ? ` (during ${capturedDuring} focus)` : ""}`); };
-  const resetAll = async () => { if (!confirm("Reset everything?")) return; setNodes(DEFAULT_NODES); setSynergies(DEFAULT_SYNERGIES); setEnergyMap({}); setGravityMap({}); setShipLog([]); setActivityLog([]); setChatMessages([]); setSuggestions({}); await storageDel(STORAGE_KEYS.mapState); await storageDel(STORAGE_KEYS.logs); await storageDel(STORAGE_KEYS.chat); await storageDel(STORAGE_KEYS.suggestions); };
+  const resetAll = async () => { if (!confirm("Reset everything?")) return; setNodes(DEFAULT_NODES); setSynergies(DEFAULT_SYNERGIES); setEnergyMap({}); setGravityMap({}); setShipLog([]); setActivityLog([]); setChatMessages([]); setSuggestions({}); setTodayList(null); setTodaySkipped([]); setTodayCompleted([]); await storageDel(STORAGE_KEYS.mapState); await storageDel(STORAGE_KEYS.logs); await storageDel(STORAGE_KEYS.chat); await storageDel(STORAGE_KEYS.suggestions); await storageDel(STORAGE_KEYS.today); };
 
   /* VOICE PIPELINE */
   const cancelVoice = useCallback(() => {
@@ -1387,8 +1579,8 @@ Rules:
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 210, background: `${C.bg}ee`, backdropFilter: "blur(14px)", borderBottom: `1px solid ${C.border}`, padding: isMobile ? "8px 10px" : "10px 18px", display: "flex", alignItems: "center", gap: isMobile ? 4 : 8, flexWrap: isMobile ? "wrap" : "nowrap" }}>
         {!isMobile && <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 700, color: C.text, marginRight: 10, whiteSpace: "nowrap" }}>Anna's Living Map</div>}
         <div style={{ display: "flex", gap: 2, marginRight: isMobile ? 0 : 8, overflowX: isMobile ? "auto" : "visible", WebkitOverflowScrolling: "touch", flexShrink: 0 }}>
-          {[["map", "Map"], ["connections", "Conn"], ["log", "Log"], ["review", "Review"], ["claude", "Claude"]].map(([v, l]) => (
-            <button key={v} onClick={() => setView(v)} style={{ ...pill(view === v, v === "claude" ? C.lavender : v === "review" ? C.gold : C.text), ...(v === "claude" && view !== "claude" ? { borderColor: `${C.lavender}40` } : {}), ...(v === "review" && view !== "review" ? { borderColor: `${C.gold}30` } : {}), whiteSpace: "nowrap", minHeight: isMobile ? 32 : "auto" }}>{v === "claude" ? "💬 " + l : v === "review" ? "📋 " + l : l}</button>
+          {[["map", "Map"], ["today", "Today"], ["connections", "Conn"], ["log", "Log"], ["review", "Review"], ["claude", "Claude"]].map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{ ...pill(view === v, v === "claude" ? C.lavender : v === "review" ? C.gold : v === "today" ? C.warm : C.text), ...(v === "claude" && view !== "claude" ? { borderColor: `${C.lavender}40` } : {}), ...(v === "review" && view !== "review" ? { borderColor: `${C.gold}30` } : {}), ...(v === "today" && view !== "today" ? { borderColor: `${C.warm}30` } : {}), whiteSpace: "nowrap", minHeight: isMobile ? 32 : "auto" }}>{v === "claude" ? "💬 " + l : v === "review" ? "📋 " + l : v === "today" ? "◎ " + l : l}</button>
           ))}
         </div>
         {view === "map" && <div style={{ display: "flex", gap: 2, flex: 1, flexWrap: isMobile ? "nowrap" : "wrap", alignItems: "center", overflowX: isMobile ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
@@ -1426,6 +1618,7 @@ Rules:
 
       {view === "connections" && <ConnectionsView />}
       {view === "log" && <LogView />}
+      {view === "today" && <TodayPanel nodes={nodes} synergies={synergies} shipLog={shipLog} energyMap={energyMap} gravityMap={gravityMap} suggestions={suggestions} todayList={todayList} setTodayList={setTodayList} todayLoading={todayLoading} setTodayLoading={setTodayLoading} todayCompleted={todayCompleted} setTodayCompleted={setTodayCompleted} todaySkipped={todaySkipped} setTodaySkipped={setTodaySkipped} todayCacheTime={todayCacheTime} addShip={addShip} logAct={logAct} />}
       {view === "review" && <ReviewPanel nodes={nodes} synergies={synergies} shipLog={shipLog} energyMap={energyMap} gravityMap={gravityMap} setGravityMap={setGravityMap} setNodes={setNodes} setView={setView} />}
       {view === "claude" && <ClaudePanel nodes={nodes} synergies={synergies} shipLog={shipLog} activityLog={activityLog} energyMap={energyMap} gravityMap={gravityMap} messages={chatMessages} setMessages={setChatMessages} />}
 
