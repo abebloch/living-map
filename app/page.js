@@ -268,6 +268,7 @@ NODES:\n${nodesSummary}\n\nRECENT SHIPS:\n${recentShips || "None."}\n\nACTIVITY:
    TODAY VIEW
    ═══════════════════════════════════ */
 function TodayPanel({ nodes, synergies, shipLog, energyMap, gravityMap, suggestions, todayList, setTodayList, todayLoading, setTodayLoading, todayCompleted, setTodayCompleted, todaySkipped, setTodaySkipped, todayCacheTime, addShip, logAct }) {
+  const [todayError, setTodayError] = useState(false);
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
   const weekShips = shipLog.filter(s => s.date >= sevenDaysAgo);
   const parkingCount = nodes.filter(n => n.cluster === "Intake Zone").length;
@@ -278,6 +279,7 @@ function TodayPanel({ nodes, synergies, shipLog, energyMap, gravityMap, suggesti
     // Use cache if less than 30 min old
     if (todayList && todayCacheTime.current && Date.now() - todayCacheTime.current < 30 * 60 * 1000) return;
     setTodayLoading(true);
+    setTodayError(false);
     const projectData = nodes.filter(n => n.status !== "shipped" && n.status !== "dormant").map(n => {
       const ships = weekShips.filter(s => s.nodeId === n.id);
       const lastShip = shipLog.filter(s => s.nodeId === n.id).slice(-1)[0];
@@ -342,7 +344,7 @@ Ranking factors (in order of weight):
           todayCacheTime.current = Date.now();
         }
       }
-    } catch (err) { console.error("Today generation error:", err); }
+    } catch (err) { console.error("Today generation error:", err); setTodayError(true); }
     finally { setTodayLoading(false); }
   };
 
@@ -373,9 +375,17 @@ Ranking factors (in order of weight):
         <div style={{ marginBottom: 28 }}>
           <h2 style={{ color: C.text, fontSize: 22, fontWeight: 700, margin: "0 0 6px", fontFamily: "'Playfair Display',serif" }}>Today</h2>
           <p style={{ color: C.muted, fontSize: 12, margin: 0 }}>
-            {todayLoading ? "Building your focus list…" : todayList ? `${visibleItems.length} tasks remaining` : "Loading…"}
+            {todayLoading ? "Building your focus list…" : todayList ? `${visibleItems.length} tasks remaining` : todayError ? "Couldn't reach the API — try again." : "Preparing…"}
           </p>
         </div>
+
+        {todayError && !todayLoading && !todayList && (
+          <div style={{ background: C.surface, borderRadius: 12, padding: "28px", border: `1px solid ${C.warm}20`, textAlign: "center" }}>
+            <p style={{ color: C.muted, fontSize: 12, margin: "0 0 12px" }}>The AI couldn't generate your list. This usually means the API is busy.</p>
+            <button onClick={() => { setTodayError(false); generateToday(); }}
+              style={{ background: `${C.warm}15`, border: `1px solid ${C.warm}40`, borderRadius: 8, padding: "8px 18px", color: C.warm, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>↻ Try again</button>
+          </div>
+        )}
 
         {todayLoading && !todayList && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -437,7 +447,7 @@ Ranking factors (in order of weight):
 
         {todayList && !todayLoading && (
           <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
-            <button onClick={() => { todayCacheTime.current = null; setTodayList(null); setTodayCompleted([]); generateToday(); }}
+            <button onClick={() => { todayCacheTime.current = null; setTodayList(null); setTodayCompleted([]); setTodayError(false); generateToday(); }}
               style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.faint, fontSize: 10, cursor: "pointer" }}>↻ Refresh list</button>
           </div>
         )}
@@ -921,6 +931,8 @@ export default function LivingMap() {
   const [todaySkipped, setTodaySkipped] = useState([]);
   const todayCacheTime = useRef(null);
   const [advisorCache, setAdvisorCache] = useState({});
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [advisorLoading, setAdvisorLoading] = useState(false);
   const [momentumSource, setMomentumSource] = useState(null);
   const momentumTimer = useRef(null);
   const harvestTimerRef = useRef(null);
@@ -937,6 +949,7 @@ export default function LivingMap() {
   const saveTimerRef = useRef(null);
 
   const selNode = nodes.find(n => n.id === sel);
+  useEffect(() => { setAdvisorOpen(false); setAdvisorLoading(false); }, [sel]);
   const focusActive = filter !== "All";
   const focusedIds = focusActive ? new Set(nodes.filter(n => n.cluster === filter).map(n => n.id)) : null;
   const connectedToFocus = focusActive ? new Set(
@@ -1559,11 +1572,9 @@ Rules:
     const [newStepText, setNewStepText] = useState("");
     const [editingStepId, setEditingStepId] = useState(null);
     const [editStepVal, setEditStepVal] = useState("");
-    const [advisorOpen, setAdvisorOpen] = useState(false);
-    const [advisorLoading, setAdvisorLoading] = useState(false);
     const steps = getSteps(n);
     const pending = pendingSteps(n);
-    useEffect(() => { setDescVal(n.desc); setEditDesc(false); setNewStepText(""); setEditingStepId(null); setAdvisorOpen(false); }, [n.id]);
+    useEffect(() => { setDescVal(n.desc); setEditDesc(false); setNewStepText(""); setEditingStepId(null); }, [n.id]);
 
     const advisorData = advisorCache[n.id];
     const advisorFresh = advisorData && (Date.now() - advisorData.time < 3600000);
