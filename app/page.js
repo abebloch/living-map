@@ -767,6 +767,9 @@ export default function LivingMap() {
   const [todayCompleted, setTodayCompleted] = useState([]);
   const [todaySkipped, setTodaySkipped] = useState([]);
   const todayCacheTime = useRef(null);
+  const [advisorCache, setAdvisorCache] = useState({});
+  const [momentumSource, setMomentumSource] = useState(null);
+  const momentumTimer = useRef(null);
   const harvestTimerRef = useRef(null);
   const celebrationTimerRef = useRef(null);
   const sessionShipCount = useRef(0);
@@ -974,6 +977,12 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
   };
 
   /* CELEBRATION LOGIC */
+  const triggerMomentum = useCallback((nodeId) => {
+    if (momentumTimer.current) clearTimeout(momentumTimer.current);
+    setMomentumSource(nodeId);
+    momentumTimer.current = setTimeout(() => setMomentumSource(null), isMobile ? 2000 : 1500);
+  }, [isMobile]);
+
   const triggerCelebration = (nodeId, shipText, isHarvest) => {
     sessionShipCount.current += 1;
     const node = nodes.find(n => n.id === nodeId);
@@ -1317,7 +1326,12 @@ Rules:
           const isH = hov && (s.from === hov || s.to === hov);
           const st = SYNERGY_TYPES[s.type] || SYNERGY_TYPES.feeds;
           const focusOpacity = focusActive ? (involvesFocus ? 0.5 : 0.03) : 0.3;
-          return (<g key={i}><line x1={x1} y1={y1} x2={x2} y2={y2} stroke={st.color} strokeWidth={isH ? 3 : 1.5} strokeDasharray={s.type === "lineage" ? "" : s.type === "accelerates" ? "8,4" : "5,4"} opacity={hov ? (isH ? 1 : 0.05) : focusOpacity} style={{ transition: "opacity 0.4s" }} />{isH && <><circle cx={x1} cy={y1} r={4} fill={st.color} opacity={0.8} /><circle cx={x2} cy={y2} r={4} fill={st.color} opacity={0.8} /></>}</g>);
+          const isMomentum = momentumSource && (s.from === momentumSource || s.to === momentumSource);
+          const mColor = isMomentum ? clr(nm[momentumSource]?.cluster).main : st.color;
+          const mOpacity = isMomentum ? 0.9 : hov ? (isH ? 1 : 0.05) : focusOpacity;
+          const mWidth = isMomentum ? 2.5 : isH ? 3 : 1.5;
+          const lineLen = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+          return (<g key={i}><line x1={x1} y1={y1} x2={x2} y2={y2} stroke={isMomentum ? mColor : st.color} strokeWidth={mWidth} strokeDasharray={s.type === "lineage" ? "" : s.type === "accelerates" ? "8,4" : "5,4"} opacity={mOpacity} style={{ transition: "opacity 0.3s" }} />{isH && <><circle cx={x1} cy={y1} r={4} fill={st.color} opacity={0.8} /><circle cx={x2} cy={y2} r={4} fill={st.color} opacity={0.8} /></>}{isMomentum && <circle r={4} fill={mColor} opacity={0.9}><animateMotion dur="0.6s" repeatCount="1" fill="freeze" path={`M${x1},${y1} L${x2},${y2}`} /></circle>}</g>);
         })}
       </svg>
     );
@@ -1329,6 +1343,8 @@ Rules:
     const isConn = addingConn && addingConn.from !== node.id;
     const dimmed = hov && hov !== node.id && !synergies.some(sy => (sy.from === hov && sy.to === node.id) || (sy.to === hov && sy.from === node.id));
     const hasSuggestion = pendingSteps(node).length === 0 && suggestions[node.id]?.text && !suggestions[node.id]?.dismissed;
+    const moveText = firstPending(node) || (hasSuggestion ? suggestions[node.id].text : "");
+    const isMomentumTarget = momentumSource && momentumSource !== node.id && synergies.some(sy => (sy.from === momentumSource && sy.to === node.id) || (sy.to === momentumSource && sy.from === node.id));
     const isDormant = node.status === "dormant";
     const isFocused = !focusActive || focusedIds.has(node.id);
     const isConnToFocus = focusActive && connectedToFocus.has(node.id);
@@ -1339,21 +1355,24 @@ Rules:
     const nodeBg = isSel ? `${cl.main}18` : isDormant ? DORMANT_STYLE.bg : en ? en.bg : `${C.bgLight}dd`;
     const nodeBorder = isSel ? cl.main : isDormant ? DORMANT_STYLE.border.slice(0, 7) : en ? en.border.slice(0, 7) : isConn ? "#fff" : `${cl.main}25`;
     const nodeGlow = isSel ? `0 0 20px ${cl.main}30` : isDormant ? DORMANT_STYLE.glow : en ? `0 0 16px ${en.glow}` : "0 2px 10px rgba(0,0,0,0.3)";
-    const isPulsing = pulsingNode === node.id;
+    const isPulsing = pulsingNode === node.id || isMomentumTarget;
     const pulseGlow = isPulsing ? `0 0 24px ${C.mint}50, 0 0 48px ${C.mint}20` : nodeGlow;
     return (
       <div onMouseEnter={() => !addingConn && !dragNodeRef.current && setHov(node.id)} onMouseLeave={() => setHov(null)}
         onMouseDown={e => onNodeMD(e, node.id)} onTouchStart={e => onNodeMD(e, node.id)}
         style={{ position: "absolute", left: node.x, top: node.y, zIndex: isSel ? 100 : isFocusDimmed ? 1 : 10, transform: `scale(${grav.scale})`, transformOrigin: "center center", opacity: finalOpacity, filter: blurAmount, cursor: isConn ? "crosshair" : "grab", transition: "opacity 0.4s, transform 0.3s ease, filter 0.4s", userSelect: "none", pointerEvents: isFocusDimmed ? "none" : "auto" }}>
-        <div style={{ background: nodeBg, border: `1.5px solid ${isPulsing ? C.mint : nodeBorder}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: pulseGlow, transition: "border-color 0.3s, box-shadow 0.3s, background 0.3s", animation: isPulsing ? "shipPulse 1.2s ease-out" : "none" }}>
+        <div style={{ background: nodeBg, border: `1.5px solid ${isMomentumTarget ? clr(nodes.find(x => x.id === momentumSource)?.cluster).main : isPulsing ? C.mint : nodeBorder}`, borderRadius: 11, padding: "9px 13px", minWidth: 130, maxWidth: 195, boxShadow: pulseGlow, transition: "border-color 0.3s, box-shadow 0.3s, background 0.3s", animation: isMomentumTarget ? "momentumPulse 0.6s ease-out" : isPulsing ? "shipPulse 1.2s ease-out" : "none" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: isDormant ? C.dim : s.color, fontSize: 10 }}>{s.icon}</span><span style={{ color: isDormant ? C.dim : C.muted, fontSize: 9, letterSpacing: "0.04em", textTransform: "uppercase" }}>{s.label}</span></div>
             {hasSuggestion && <span style={{ color: C.lavender, fontSize: 8, opacity: 0.7 }}>✦</span>}
           </div>
           <div style={{ color: isDormant ? C.faint : C.text, fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{node.title}</div>
-          {hasSuggestion && (
-            <div style={{ color: C.lavender, fontSize: 9, marginTop: 4, opacity: 0.5, fontStyle: "italic", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              ✦ {suggestions[node.id].text}
+          {moveText && (
+            <div
+              onMouseEnter={e => { e.stopPropagation(); if (!isMobile) triggerMomentum(node.id); }}
+              onClick={e => { if (isMobile && moveText) { e.stopPropagation(); triggerMomentum(node.id); } }}
+              style={{ color: hasSuggestion ? C.lavender : C.muted, fontSize: 9, marginTop: 4, opacity: hasSuggestion ? 0.5 : 0.7, fontStyle: hasSuggestion ? "italic" : "normal", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "default" }}>
+              {hasSuggestion ? "\u2726 " : "\u2192 "}{moveText.length > 30 ? moveText.slice(0, 30) + "\u2026" : moveText}
             </div>
           )}
         </div>
@@ -1387,9 +1406,75 @@ Rules:
     const [newStepText, setNewStepText] = useState("");
     const [editingStepId, setEditingStepId] = useState(null);
     const [editStepVal, setEditStepVal] = useState("");
+    const [advisorOpen, setAdvisorOpen] = useState(false);
+    const [advisorLoading, setAdvisorLoading] = useState(false);
     const steps = getSteps(n);
     const pending = pendingSteps(n);
-    useEffect(() => { setDescVal(n.desc); setEditDesc(false); setNewStepText(""); setEditingStepId(null); }, [n.id]);
+    useEffect(() => { setDescVal(n.desc); setEditDesc(false); setNewStepText(""); setEditingStepId(null); setAdvisorOpen(false); }, [n.id]);
+
+    const advisorData = advisorCache[n.id];
+    const advisorFresh = advisorData && (Date.now() - advisorData.time < 3600000);
+    const fetchAdvisor = async () => {
+      if (advisorFresh) { setAdvisorOpen(true); return; }
+      setAdvisorOpen(true); setAdvisorLoading(true);
+      const nodeShipsAll = shipLog.filter(s => s.nodeId === n.id);
+      const lastShip = nodeShipsAll.slice(-1)[0];
+      const daysSince = lastShip ? Math.floor((Date.now() - new Date(lastShip.date).getTime()) / 86400000) : 999;
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+      const shipsThisWeek = nodeShipsAll.filter(s => s.date >= weekAgo).length;
+      const conns = synergies.filter(s => s.from === n.id || s.to === n.id).map(s => {
+        const oid = s.from === n.id ? s.to : s.from;
+        const other = nodes.find(x => x.id === oid);
+        return { title: other?.title || "?", type: s.type, label: s.label || "" };
+      });
+      const clusterShips = {};
+      shipLog.filter(s => s.date >= weekAgo).forEach(s => {
+        const nd = nodes.find(x => x.id === s.nodeId);
+        if (nd) clusterShips[nd.cluster] = (clusterShips[nd.cluster] || 0) + 1;
+      });
+      const prompt = `You are a strategic advisor for Anna's project portfolio. Analyze this project and return ONLY valid JSON (no markdown, no backticks):
+
+PROJECT: "${n.title}" [${n.cluster}]
+Status: ${n.status} | Gravity: ${gravityMap[n.id] || "normal"} | Energy: ${energyMap[n.id] || "none"}
+Days since last ship: ${daysSince} | Ships this week: ${shipsThisWeek}
+Pending steps: ${pending.map(s => s.text).join("; ") || "none"}
+
+SYNERGY CONNECTIONS:
+${conns.map(c => `→ ${c.title} (${c.type}${c.label ? ": " + c.label : ""})`).join("\n") || "None"}
+
+CLUSTER TEMPERATURES (ships this week): ${Object.entries(clusterShips).map(([c, n]) => `${c}: ${n}`).join(", ") || "all cold"}
+
+Return this exact JSON structure:
+{
+  "downstream": "1-2 sentences: what happens if Anna works on this now? Which connected projects benefit and how?",
+  "state": "Brief factual: days since last ship, ships this week, cluster temperature, gravity level",
+  "advice": "One honest sentence of contextual advice based on the pattern"
+}
+
+Advice rules:
+- High gravity but cold: nudge to do a small move
+- Low gravity and user is considering it: gently ask if something heavier needs energy first
+- Dormant by choice: reassure they don't need to think about it
+- Getting all energy: suggest spreading to colder clusters
+- Well-maintained: acknowledge and point to where energy might be needed more`;
+
+      try {
+        const response = await fetch("/api/claude", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+        });
+        if (!response.ok) throw new Error("API error");
+        const data = await response.json();
+        const text = data.content?.find(b => b.type === "text")?.text?.trim();
+        if (text) {
+          const clean = text.replace(/```json|```/g, "").trim();
+          const parsed = JSON.parse(clean);
+          setAdvisorCache(prev => ({ ...prev, [n.id]: { ...parsed, time: Date.now() } }));
+        }
+      } catch (err) { console.error("Advisor error:", err); }
+      finally { setAdvisorLoading(false); }
+    };
     const toggleStep = (stepId) => { updateNode(n.id, { nextSteps: steps.map(s => s.id === stepId ? { ...s, done: !s.done } : s) }); };
     const removeStep = (stepId) => { updateNode(n.id, { nextSteps: steps.filter(s => s.id !== stepId) }); };
     const addStep = (text) => { if (!text.trim()) return; updateNode(n.id, { nextSteps: [...steps, { id: `s_${Date.now()}`, text: text.trim(), done: false }] }); setNewStepText(""); };
@@ -1487,6 +1572,44 @@ Rules:
         )}
         {n.shippedAs && <div style={{ ...panelBox, borderColor: `${C.mint}25` }}><span style={{ color: C.mint, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>Shipped as</span><p style={{ color: C.text, fontSize: 12, margin: "4px 0 0" }}>{n.shippedAs}</p></div>}
         {n.status === "ready" && <div style={{ ...panelBox, background: `${C.warm}08`, borderColor: `${C.warm}25`, borderStyle: "dashed" }}><div style={{ color: C.warm, fontSize: 11, fontWeight: 700 }}>🚩 Ready Line</div><div style={{ color: C.muted, fontSize: 11 }}>One move gets this out.</div></div>}
+        {/* WHY THIS ADVISOR */}
+        {n.status !== "shipped" && (
+          <div style={{ marginBottom: 8 }}>
+            {!advisorOpen ? (
+              <button onClick={fetchAdvisor}
+                style={{ background: `${C.sky}08`, border: `1px solid ${C.sky}20`, borderRadius: 10, padding: "8px 12px", color: C.sky, fontSize: 11, cursor: "pointer", width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" }}>
+                <span style={{ fontSize: 13 }}>?</span>
+                <span style={{ fontWeight: 500 }}>Why this? What happens if I work on this now?</span>
+              </button>
+            ) : (
+              <div style={{ ...panelBox, borderColor: `${C.sky}25`, background: `${C.sky}05` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ color: C.sky, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>? Why this</span>
+                  <button onClick={() => setAdvisorOpen(false)} style={{ background: "none", border: "none", color: C.faint, fontSize: 10, cursor: "pointer" }}>close</button>
+                </div>
+                {advisorLoading && !advisorFresh && (
+                  <div style={{ color: C.muted, fontSize: 11, fontStyle: "italic", padding: "8px 0" }}>Thinking about downstream effects...</div>
+                )}
+                {(advisorFresh || advisorData) && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div>
+                      <div style={{ color: C.warm, fontSize: 9, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>If you work on this now</div>
+                      <p style={{ color: C.text, fontSize: 12, lineHeight: 1.5, margin: 0 }}>{advisorData?.downstream || "\u2014"}</p>
+                    </div>
+                    <div>
+                      <div style={{ color: C.muted, fontSize: 9, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Current state</div>
+                      <p style={{ color: C.muted, fontSize: 11, lineHeight: 1.5, margin: 0 }}>{advisorData?.state || "\u2014"}</p>
+                    </div>
+                    <div style={{ padding: "8px 10px", background: `${C.bgLight}`, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                      <div style={{ color: C.lavender, fontSize: 9, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Honest read</div>
+                      <p style={{ color: C.text, fontSize: 12, lineHeight: 1.5, margin: 0, fontStyle: "italic" }}>{advisorData?.advice || "\u2014"}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <span style={{ color: C.muted, fontSize: 9, fontWeight: 600, textTransform: "uppercase" }}>Connections ({nodeConns.length})</span>
@@ -1813,6 +1936,7 @@ Rules:
         @keyframes fadeSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @keyframes fadeSlideDown { from { opacity: 0; transform: translateX(-50%) translateY(-10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @keyframes shipPulse { 0% { box-shadow: 0 0 8px rgba(115,235,174,0.3); } 40% { box-shadow: 0 0 28px rgba(115,235,174,0.5), 0 0 56px rgba(115,235,174,0.15); } 100% { box-shadow: 0 0 8px rgba(115,235,174,0); } }
+        @keyframes momentumPulse { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
         @keyframes celebFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes celebScaleIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
         @keyframes celebBounce { 0% { opacity: 0; transform: scale(0.3) translateY(10px); } 60% { opacity: 1; transform: scale(1.15) translateY(-4px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
