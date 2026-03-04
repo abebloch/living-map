@@ -457,6 +457,9 @@ function ReviewPanel({ nodes, synergies, shipLog, energyMap, gravityMap, setGrav
   const [parkingIdx, setParkingIdx] = useState(0);
   const [gravityDraft, setGravityDraft] = useState({ ...gravityMap });
   const [reviewDone, setReviewDone] = useState(false);
+  const [sequenceData, setSequenceData] = useState(null);
+  const [sequenceLoading, setSequenceLoading] = useState(false);
+  const [adoptedTasks, setAdoptedTasks] = useState(new Set());
 
   const parkingItems = nodes.filter(n => n.cluster === "Intake Zone");
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -529,25 +532,110 @@ Be honest. If nothing happened, say so plainly. If there's real momentum, name i
   };
   const skipParking = () => setParkingIdx(i => i + 1);
 
-  /* STEP 3: THE RESET — commit gravity changes */
+  /* STEP 3: THE RESET — commit gravity, advance to step 4 */
   const commitReset = () => {
     setGravityMap(gravityDraft);
+    setStep(4);
+  };
+
+  const finishReview = () => {
     setReviewDone(true);
   };
 
-  const stepColor = step === 1 ? C.sky : step === 2 ? C.gold : C.mint;
-  const stepLabels = { 1: "The Mirror", 2: "The Parking Lot", 3: "The Reset" };
+  /* STEP 4: THE PATH FORWARD — AI sequence */
+  const generateSequence = async () => {
+    if (sequenceLoading || sequenceData) return;
+    setSequenceLoading(true);
+    const projectData = activeProjects.map(n => {
+      const ships = weekShips.filter(s => s.nodeId === n.id).length;
+      const lastShip = shipLog.filter(s => s.nodeId === n.id).slice(-1)[0];
+      const daysSince = lastShip ? Math.floor((Date.now() - new Date(lastShip.date).getTime()) / 86400000) : 999;
+      const conns = synergies.filter(sy => sy.from === n.id || sy.to === n.id).map(sy => {
+        const oid = sy.from === n.id ? sy.to : sy.from;
+        const other = nodes.find(x => x.id === oid);
+        return `${other?.title} (${sy.type}${sy.label ? ": " + sy.label : ""})`;
+      });
+      const steps = pendingSteps(n);
+      return `id:${n.id} "${n.title}" [${n.cluster}] gravity:${gravityDraft[n.id] || "normal"} energy:${energyMap[n.id] || "none"} ships_7d:${ships} days_since:${daysSince} steps:"${steps.map(s => s.text).join("; ") || "none"}" connections:[${conns.join(", ")}]`;
+    }).join("\n");
+
+    const clusterShips = {};
+    weekShips.forEach(s => { const n = nodes.find(x => x.id === s.nodeId); if (n) clusterShips[n.cluster] = (clusterShips[n.cluster] || 0) + 1; });
+
+    const prompt = `You are Anna's strategic advisor. After analyzing her weekly review, suggest a sequence of 3-5 highest-leverage actions for the coming week.
+
+PROJECTS:\n${projectData}
+
+CLUSTER TEMPERATURES (ships this week): ${Object.entries(clusterShips).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c}: ${n}`).join(", ") || "all cold"}
+
+${mirrorData ? `MIRROR ANALYSIS:\nHot: ${mirrorData.hotClusters?.join(", ") || "none"}\nCold: ${mirrorData.coldCluster || "none"}\nMismatch: ${mirrorData.mismatch || "none"}\nObservation: ${mirrorData.observation || ""}` : ""}
+
+Return ONLY valid JSON (no markdown, no backticks):
+{
+  "sequence": [
+    {
+      "rank": 1,
+      "task": "specific task starting with a physical verb, under 15 words",
+      "projectId": "the project id",
+      "reason": "why this position in the sequence — what it unblocks or feeds"
+    }
+  ],
+  "thread": "2-3 sentences explaining the connecting thread between these tasks"
+}
+
+Ranking factors:
+- Dependencies: tasks that unblock other tasks come first
+- Cross-project leverage: tasks feeding multiple projects via synergies rank higher
+- Time sensitivity: approaching deadlines get boosted
+- Cold cluster recovery: at least one task should address the most neglected high-gravity cluster
+- Do NOT suggest more than one task per project
+- Use the project's pending steps as the task if available
+- Always start tasks with a physical verb (open, write, send, sketch, review, list, draft)`;
+
+    try {
+      const response = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!response.ok) throw new Error("API error");
+      const data = await response.json();
+      const text = data.content?.find(b => b.type === "text")?.text?.trim();
+      if (text) {
+        const clean = text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean);
+        setSequenceData(parsed);
+      }
+    } catch (err) { console.error("Sequence error:", err); }
+    finally { setSequenceLoading(false); }
+  };
+
+  useEffect(() => { if (step === 4 && !sequenceData && !sequenceLoading) generateSequence(); }, [step]);
+
+  const adoptTask = (item) => {
+    const node = nodes.find(n => n.id === item.projectId);
+    if (!node) return;
+    const currentSteps = getSteps(node);
+    const alreadyExists = currentSteps.some(s => s.text === item.task);
+    if (!alreadyExists) {
+      setNodes(prev => prev.map(n => n.id === item.projectId ? { ...n, nextSteps: [...getSteps(n), { id: `s_${Date.now()}`, text: item.task, done: false }] } : n));
+    }
+    setAdoptedTasks(prev => new Set([...prev, item.projectId]));
+  };
+
+  const stepColor = step === 1 ? C.sky : step === 2 ? C.gold : step === 3 ? C.mint : C.lavender;
+  const stepLabels = { 1: "The Mirror", 2: "The Parking Lot", 3: "The Reset", 4: "The Path Forward" };
 
   return (
     <div style={{ position: "fixed", left: 0, top: 48, bottom: 0, width: "100%", background: C.bg, zIndex: 180, display: "flex", flexDirection: "column" }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px", maxWidth: 640, margin: "0 auto", width: "100%" }}>
         {/* STEP INDICATOR */}
         <div style={{ display: "flex", gap: 6, marginBottom: 28, alignItems: "center" }}>
-          {[1, 2, 3].map(s => (
+          {[1, 2, 3, 4].map(s => (
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button onClick={() => { if (s < step || (s === 2 && step >= 1) || (s === 3 && step >= 2)) setStep(s); }}
+              <button onClick={() => { if (s <= step) setStep(s); }}
                 style={{ width: 28, height: 28, borderRadius: "50%", border: `1.5px solid ${s === step ? stepColor : s < step ? `${C.mint}50` : C.border}`, background: s < step ? `${C.mint}18` : s === step ? `${stepColor}15` : "transparent", color: s < step ? C.mint : s === step ? stepColor : C.faint, fontSize: 11, fontWeight: 700, cursor: s <= step ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>{s < step ? "✓" : s}</button>
-              {s < 3 && <div style={{ width: 32, height: 1.5, background: s < step ? `${C.mint}40` : C.border, borderRadius: 1 }} />}
+              {s < 4 && <div style={{ width: 24, height: 1.5, background: s < step ? `${C.mint}40` : C.border, borderRadius: 1 }} />}
             </div>
           ))}
           <span style={{ color: stepColor, fontSize: 11, fontWeight: 600, marginLeft: 8 }}>{stepLabels[step]}</span>
@@ -702,7 +790,71 @@ Be honest. If nothing happened, say so plainly. If there's real momentum, name i
             </div>
             <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
               <button onClick={() => setStep(2)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 18px", color: C.muted, fontSize: 12, cursor: "pointer" }}>← Back</button>
-              <button onClick={commitReset} style={{ background: `${C.mint}20`, border: `1px solid ${C.mint}50`, borderRadius: 10, padding: "10px 22px", color: C.mint, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✓ Complete review</button>
+              <button onClick={commitReset} style={{ background: `${C.mint}20`, border: `1px solid ${C.mint}50`, borderRadius: 10, padding: "10px 22px", color: C.mint, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Next → The Path Forward</button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: THE PATH FORWARD */}
+        {step === 4 && !reviewDone && (
+          <div>
+            <h2 style={{ color: C.text, fontSize: 20, fontWeight: 700, margin: "0 0 4px", fontFamily: "'Playfair Display',serif" }}>The Path Forward</h2>
+            <p style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>A suggested sequence for the coming week — what to do, and why in this order.</p>
+
+            {sequenceLoading && !sequenceData && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{ background: C.surface, borderRadius: 12, padding: "18px", border: `1px solid ${C.border}`, opacity: 0.5 + i * 0.15 }}>
+                    <div style={{ width: "65%", height: 12, background: C.border, borderRadius: 4, marginBottom: 8 }} />
+                    <div style={{ width: "45%", height: 8, background: C.border, borderRadius: 4, opacity: 0.5 }} />
+                  </div>
+                ))}
+                <p style={{ color: C.muted, fontSize: 11, fontStyle: "italic", textAlign: "center", marginTop: 8 }}>Building your weekly sequence\u2026</p>
+              </div>
+            )}
+
+            {sequenceData && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {sequenceData.sequence?.map((item, idx) => {
+                  const node = nodes.find(n => n.id === item.projectId);
+                  const cl = node ? CLUSTERS[node.cluster] : null;
+                  const adopted = adoptedTasks.has(item.projectId);
+                  return (
+                    <div key={idx} style={{ background: adopted ? `${C.mint}06` : C.surface, borderRadius: 12, padding: "16px 18px", border: `1px solid ${adopted ? `${C.mint}25` : idx === 0 ? `${C.lavender}25` : C.border}`, transition: "all 0.3s" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                        <div style={{ color: idx === 0 ? C.lavender : C.faint, fontSize: 18, fontWeight: 700, fontFamily: "'Playfair Display',serif", minWidth: 24, paddingTop: 2 }}>{item.rank || idx + 1}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: C.text, fontSize: 14, fontWeight: 500, lineHeight: 1.5, marginBottom: 4 }}>{item.task}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            {cl && <span style={{ color: cl.main, fontSize: 10, fontWeight: 600 }}>{node.title}</span>}
+                            {cl && <span style={{ color: C.faint, fontSize: 9 }}>\u00b7</span>}
+                            {cl && <span style={{ color: C.faint, fontSize: 9 }}>{node.cluster}</span>}
+                          </div>
+                          <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.4, fontStyle: "italic" }}>{item.reason}</div>
+                          {!adopted ? (
+                            <button onClick={() => adoptTask(item)}
+                              style={{ marginTop: 8, background: `${C.warm}12`, border: `1px solid ${C.warm}30`, borderRadius: 8, padding: "5px 12px", color: C.warm, fontSize: 10, fontWeight: 500, cursor: "pointer" }}>\u2192 Adopt as next step</button>
+                          ) : (
+                            <span style={{ display: "inline-block", marginTop: 8, color: C.mint, fontSize: 10, fontWeight: 600 }}>\u2713 Added to {node?.title}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {sequenceData.thread && (
+                  <div style={{ background: `${C.lavender}08`, borderRadius: 12, padding: "14px 16px", border: `1px solid ${C.lavender}18`, marginTop: 6 }}>
+                    <div style={{ color: C.lavender, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>The connecting thread</div>
+                    <p style={{ color: C.text, fontSize: 12, lineHeight: 1.6, margin: 0 }}>{sequenceData.thread}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginTop: 24, display: "flex", justifyContent: "space-between" }}>
+              <button onClick={() => setStep(3)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 18px", color: C.muted, fontSize: 12, cursor: "pointer" }}>\u2190 Back</button>
+              <button onClick={finishReview} style={{ background: `${C.lavender}20`, border: `1px solid ${C.lavender}50`, borderRadius: 10, padding: "10px 22px", color: C.lavender, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>\u2713 Looks good \u2014 finish review</button>
             </div>
           </div>
         )}
@@ -715,6 +867,7 @@ Be honest. If nothing happened, say so plainly. If there's real momentum, name i
             <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.6, marginBottom: 6 }}>
               {weekShips.length} ships this week. {Object.values(gravityDraft).filter(v => v === "heavy").length} projects set to Heavy.
               {parkingItems.length > 0 ? ` ${parkingItems.length} items still parked.` : " Intake Zone clear."}
+              {adoptedTasks.size > 0 ? ` ${adoptedTasks.size} task${adoptedTasks.size !== 1 ? "s" : ""} adopted for next week.` : ""}
             </p>
             {mirrorData?.suggestion && <p style={{ color: C.lavender, fontSize: 12, fontStyle: "italic", marginBottom: 20 }}>{mirrorData.suggestion}</p>}
             <button onClick={() => setView("map")} style={{ background: `${C.mint}18`, border: `1px solid ${C.mint}45`, borderRadius: 10, padding: "10px 22px", color: C.mint, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Back to map</button>
