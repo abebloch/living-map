@@ -331,7 +331,7 @@ Ranking factors (in order of weight):
       const response = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
       });
       if (!response.ok) throw new Error("API error " + response.status);
       const data = await response.json();
@@ -517,7 +517,7 @@ Be honest. If nothing happened, say so plainly. If there's real momentum, name i
       const response = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 400, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 400, messages: [{ role: "user", content: prompt }] }),
       });
       if (!response.ok) { setMirrorError(true); setMirrorLoading(false); return; }
       const data = await response.json();
@@ -606,7 +606,7 @@ Ranking factors:
       const response = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
       });
       if (!response.ok) throw new Error("API error");
       const data = await response.json();
@@ -933,6 +933,7 @@ export default function LivingMap() {
   const [advisorCache, setAdvisorCache] = useState({});
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [advisorError, setAdvisorError] = useState(false);
   const [momentumSource, setMomentumSource] = useState(null);
   const momentumTimer = useRef(null);
   const harvestTimerRef = useRef(null);
@@ -949,7 +950,7 @@ export default function LivingMap() {
   const saveTimerRef = useRef(null);
 
   const selNode = nodes.find(n => n.id === sel);
-  useEffect(() => { setAdvisorOpen(false); setAdvisorLoading(false); }, [sel]);
+  useEffect(() => { setAdvisorOpen(false); setAdvisorLoading(false); setAdvisorError(false); }, [sel]);
   const focusActive = filter !== "All";
   const focusedIds = focusActive ? new Set(nodes.filter(n => n.cluster === filter).map(n => n.id)) : null;
   const connectedToFocus = focusActive ? new Set(
@@ -1090,6 +1091,78 @@ Reply with ONLY the suggestion text. No quotes, no explanation.`;
 
   /* ACTIONS */
   const logAct = (t) => setActivityLog(p => [...p, { text: t, date: new Date().toISOString().slice(0, 10), time: new Date().toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) }]);
+
+  /* WHY THIS ADVISOR */
+  const fetchAdvisor = useCallback(async (nodeId) => {
+    const cached = advisorCache[nodeId];
+    const fresh = cached && (Date.now() - cached.time < 3600000);
+    if (fresh) { setAdvisorOpen(true); return; }
+    setAdvisorOpen(true); setAdvisorLoading(true); setAdvisorError(false);
+    const n = nodes.find(x => x.id === nodeId);
+    if (!n) { setAdvisorLoading(false); return; }
+    const pSteps = pendingSteps(n);
+    const nodeShipsAll = shipLog.filter(s => s.nodeId === n.id);
+    const lastShip = nodeShipsAll.slice(-1)[0];
+    const daysSince = lastShip ? Math.floor((Date.now() - new Date(lastShip.date).getTime()) / 86400000) : 999;
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const shipsThisWeek = nodeShipsAll.filter(s => s.date >= weekAgo).length;
+    const conns = synergies.filter(s => s.from === n.id || s.to === n.id).map(s => {
+      const oid = s.from === n.id ? s.to : s.from;
+      const other = nodes.find(x => x.id === oid);
+      return { title: other?.title || "?", type: s.type, label: s.label || "" };
+    });
+    const clusterShips = {};
+    shipLog.filter(s => s.date >= weekAgo).forEach(s => {
+      const nd = nodes.find(x => x.id === s.nodeId);
+      if (nd) clusterShips[nd.cluster] = (clusterShips[nd.cluster] || 0) + 1;
+    });
+    const prompt = `You are a strategic advisor for Anna's project portfolio. Analyze this project and return ONLY valid JSON (no markdown, no backticks):
+
+PROJECT: "${n.title}" [${n.cluster}]
+Status: ${n.status} | Gravity: ${gravityMap[n.id] || "normal"} | Energy: ${energyMap[n.id] || "none"}
+Days since last ship: ${daysSince} | Ships this week: ${shipsThisWeek}
+Pending steps: ${pSteps.map(s => s.text).join("; ") || "none"}
+
+SYNERGY CONNECTIONS:
+${conns.map(c => `→ ${c.title} (${c.type}${c.label ? ": " + c.label : ""})`).join("\n") || "None"}
+
+CLUSTER TEMPERATURES (ships this week): ${Object.entries(clusterShips).map(([c, ct]) => `${c}: ${ct}`).join(", ") || "all cold"}
+
+Return this exact JSON structure:
+{
+  "downstream": "1-2 sentences: what happens if Anna works on this now? Which connected projects benefit and how?",
+  "state": "Brief factual: days since last ship, ships this week, cluster temperature, gravity level",
+  "advice": "One honest sentence of contextual advice based on the pattern"
+}
+
+Advice rules:
+- High gravity but cold: nudge to do a small move
+- Low gravity and user is considering it: gently ask if something heavier needs energy first
+- Dormant by choice: reassure they don't need to think about it
+- Getting all energy: suggest spreading to colder clusters
+- Well-maintained: acknowledge and point to where energy might be needed more`;
+
+    try {
+      const response = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!response.ok) throw new Error("API " + response.status);
+      const data = await response.json();
+      const text = data.content?.find(b => b.type === "text")?.text?.trim();
+      if (!text) throw new Error("Empty response");
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      if (!parsed.downstream && !parsed.advice) throw new Error("Bad JSON structure");
+      setAdvisorCache(prev => ({ ...prev, [nodeId]: { ...parsed, time: Date.now() } }));
+    } catch (err) {
+      console.error("Advisor error:", err);
+      setAdvisorError(true);
+    } finally {
+      setAdvisorLoading(false);
+    }
+  }, [nodes, synergies, shipLog, gravityMap, energyMap, advisorCache]);
   const updateNode = (id, ch) => setNodes(p => p.map(n => n.id === id ? { ...n, ...ch } : n));
   const changeStatus = (id, ns) => { const n = nodes.find(x => x.id === id); if (n) { updateNode(id, { status: ns }); logAct(`${n.title}: ${stl(n.status).label} → ${stl(ns).label}`); } };
   const cycleEnergy = (id) => setEnergyMap(p => { const cur = p[id]; const next = { undefined: "high", high: "medium", medium: "low", low: undefined }; const nv = next[cur]; const nm = { ...p }; if (nv) nm[id] = nv; else delete nm[id]; return nm; });
@@ -1261,7 +1334,7 @@ Rules:
       const response = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
       });
       if (!response.ok) throw new Error("API error");
       const data = await response.json();
@@ -1578,67 +1651,6 @@ Rules:
 
     const advisorData = advisorCache[n.id];
     const advisorFresh = advisorData && (Date.now() - advisorData.time < 3600000);
-    const fetchAdvisor = async () => {
-      if (advisorFresh) { setAdvisorOpen(true); return; }
-      setAdvisorOpen(true); setAdvisorLoading(true);
-      const nodeShipsAll = shipLog.filter(s => s.nodeId === n.id);
-      const lastShip = nodeShipsAll.slice(-1)[0];
-      const daysSince = lastShip ? Math.floor((Date.now() - new Date(lastShip.date).getTime()) / 86400000) : 999;
-      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-      const shipsThisWeek = nodeShipsAll.filter(s => s.date >= weekAgo).length;
-      const conns = synergies.filter(s => s.from === n.id || s.to === n.id).map(s => {
-        const oid = s.from === n.id ? s.to : s.from;
-        const other = nodes.find(x => x.id === oid);
-        return { title: other?.title || "?", type: s.type, label: s.label || "" };
-      });
-      const clusterShips = {};
-      shipLog.filter(s => s.date >= weekAgo).forEach(s => {
-        const nd = nodes.find(x => x.id === s.nodeId);
-        if (nd) clusterShips[nd.cluster] = (clusterShips[nd.cluster] || 0) + 1;
-      });
-      const prompt = `You are a strategic advisor for Anna's project portfolio. Analyze this project and return ONLY valid JSON (no markdown, no backticks):
-
-PROJECT: "${n.title}" [${n.cluster}]
-Status: ${n.status} | Gravity: ${gravityMap[n.id] || "normal"} | Energy: ${energyMap[n.id] || "none"}
-Days since last ship: ${daysSince} | Ships this week: ${shipsThisWeek}
-Pending steps: ${pending.map(s => s.text).join("; ") || "none"}
-
-SYNERGY CONNECTIONS:
-${conns.map(c => `→ ${c.title} (${c.type}${c.label ? ": " + c.label : ""})`).join("\n") || "None"}
-
-CLUSTER TEMPERATURES (ships this week): ${Object.entries(clusterShips).map(([c, n]) => `${c}: ${n}`).join(", ") || "all cold"}
-
-Return this exact JSON structure:
-{
-  "downstream": "1-2 sentences: what happens if Anna works on this now? Which connected projects benefit and how?",
-  "state": "Brief factual: days since last ship, ships this week, cluster temperature, gravity level",
-  "advice": "One honest sentence of contextual advice based on the pattern"
-}
-
-Advice rules:
-- High gravity but cold: nudge to do a small move
-- Low gravity and user is considering it: gently ask if something heavier needs energy first
-- Dormant by choice: reassure they don't need to think about it
-- Getting all energy: suggest spreading to colder clusters
-- Well-maintained: acknowledge and point to where energy might be needed more`;
-
-      try {
-        const response = await fetch("/api/claude", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "claude-sonnet-4-5-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
-        });
-        if (!response.ok) throw new Error("API error");
-        const data = await response.json();
-        const text = data.content?.find(b => b.type === "text")?.text?.trim();
-        if (text) {
-          const clean = text.replace(/```json|```/g, "").trim();
-          const parsed = JSON.parse(clean);
-          setAdvisorCache(prev => ({ ...prev, [n.id]: { ...parsed, time: Date.now() } }));
-        }
-      } catch (err) { console.error("Advisor error:", err); }
-      finally { setAdvisorLoading(false); }
-    };
     const toggleStep = (stepId) => { updateNode(n.id, { nextSteps: steps.map(s => s.id === stepId ? { ...s, done: !s.done } : s) }); };
     const removeStep = (stepId) => { updateNode(n.id, { nextSteps: steps.filter(s => s.id !== stepId) }); };
     const addStep = (text) => { if (!text.trim()) return; updateNode(n.id, { nextSteps: [...steps, { id: `s_${Date.now()}`, text: text.trim(), done: false }] }); setNewStepText(""); };
@@ -1740,7 +1752,7 @@ Advice rules:
         {n.status !== "shipped" && (
           <div style={{ marginBottom: 8 }}>
             {!advisorOpen ? (
-              <button onClick={fetchAdvisor}
+              <button onClick={() => fetchAdvisor(n.id)}
                 style={{ background: `${C.sky}08`, border: `1px solid ${C.sky}20`, borderRadius: 10, padding: "8px 12px", color: C.sky, fontSize: 11, cursor: "pointer", width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" }}>
                 <span style={{ fontSize: 13 }}>?</span>
                 <span style={{ fontWeight: 500 }}>Why this? What happens if I work on this now?</span>
@@ -1751,10 +1763,17 @@ Advice rules:
                   <span style={{ color: C.sky, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>? Why this</span>
                   <button onClick={() => setAdvisorOpen(false)} style={{ background: "none", border: "none", color: C.faint, fontSize: 10, cursor: "pointer" }}>close</button>
                 </div>
-                {advisorLoading && !advisorFresh && (
+                {advisorLoading && (
                   <div style={{ color: C.muted, fontSize: 11, fontStyle: "italic", padding: "8px 0" }}>Thinking about downstream effects...</div>
                 )}
-                {(advisorFresh || advisorData) && (
+                {advisorError && !advisorLoading && (
+                  <div style={{ padding: "10px 0" }}>
+                    <p style={{ color: C.muted, fontSize: 11, margin: "0 0 8px" }}>Couldn't reach the advisor. API may be busy.</p>
+                    <button onClick={() => fetchAdvisor(n.id)}
+                      style={{ background: `${C.sky}12`, border: `1px solid ${C.sky}30`, borderRadius: 8, padding: "4px 12px", color: C.sky, fontSize: 10, cursor: "pointer" }}>↻ Try again</button>
+                  </div>
+                )}
+                {!advisorLoading && !advisorError && advisorData && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div>
                       <div style={{ color: C.warm, fontSize: 9, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>If you work on this now</div>
